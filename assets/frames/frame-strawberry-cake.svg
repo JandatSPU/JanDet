@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shBerry" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#800f2f" flood-opacity="0.25"/>
+    </filter>
+    <linearGradient id="shortcakeGrad" x1="20" y1="20" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffe5ec"/>
+      <stop offset="50%" stop-color="#ffb3c6"/>
+      <stop offset="100%" stop-color="#fb6f92"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shBerry)">
+    <circle cx="100" cy="100" r="74" stroke="#fffdf9" stroke-width="6" stroke-dasharray="2 10.8" stroke-linecap="round" fill="none"/>
+    <circle cx="100" cy="100" r="70" stroke="url(#shortcakeGrad)" stroke-width="8.5" fill="none"/>
+    <circle cx="100" cy="100" r="74.2" stroke="#a4133c" stroke-width="1.6" fill="none"/>
+    <circle cx="100" cy="100" r="65.8" stroke="#a4133c" stroke-width="1.6" fill="none"/>
+    <g transform="translate(100, 25)">
+      <path d="M-28 8 C-32 -1, -22 -8, -14 -3 C-9 -12, 9 -12, 14 -3 C22 -8, 32 -1, 28 8 C18 12, -18 12, -28 8 Z" fill="#fffdf9" stroke="#a4133c" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M0 -18 C-11 -18, -14 -3, 0 7 C14 -3, 11 -18, 0 -18 Z" fill="#e63946" stroke="#a4133c" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M-8 -17 C-4 -14, 0 -14, 0 -18 C0 -14, 4 -14, 8 -17 C4 -12, -4 -12, -8 -17 Z" fill="#52b788" stroke="#2d6a4f" stroke-width="1.3" stroke-linejoin="round"/>
+      <circle cx="-4" cy="-9" r="1" fill="#ffe66d"/>
+      <circle cx="4" cy="-9" r="1" fill="#ffe66d"/>
+      <circle cx="0" cy="-4" r="1" fill="#ffe66d"/>
+      <ellipse cx="-4" cy="-12" rx="1.5" ry="3" transform="rotate(20 -4 -12)" fill="#ffffff" opacity="0.55"/>
+    </g>
+    <g transform="translate(27, 100)">
+      <circle cx="0" cy="0" r="7.5" fill="#fffdf9" stroke="#a4133c" stroke-width="1.6"/>
+      <path d="M-3 -2 C0 -5, 4 -1, 1 3" stroke="#ffb3c6" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(173, 100)">
+      <circle cx="0" cy="0" r="7.5" fill="#fffdf9" stroke="#a4133c" stroke-width="1.6"/>
+      <path d="M-3 -2 C0 -5, 4 -1, 1 3" stroke="#ffb3c6" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(100, 171)">
+      <path d="M-6 2 L-18 16 L-11 14 L-8 19 L-2 4 Z" fill="#ff758f" stroke="#a4133c" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M6 2 L18 16 L11 14 L8 19 L2 4 Z" fill="#ff758f" stroke="#a4133c" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M-2 -1 C-14 -11, -24 -3, -18 5 C-13 10, -4 5, -2 1 Z" fill="#ff8fab" stroke="#a4133c" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M2 -1 C14 -11, 24 -3, 18 5 C13 10, 4 5, 2 1 Z" fill="#ff8fab" stroke="#a4133c" stroke-width="1.7" stroke-linejoin="round"/>
+      <circle cx="0" cy="0" r="4.5" fill="#e63946" stroke="#a4133c" stroke-width="1.6"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shEmerald" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#064e3b" flood-opacity="0.35"/>
+    </filter>
+    <linearGradient id="emeraldGold" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="50%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shEmerald)">
+    <circle cx="100" cy="100" r="70" stroke="url(#emeraldGold)" stroke-width="8.5" fill="none"/>
+    <circle cx="100" cy="100" r="74.2" stroke="#b45309" stroke-width="1.8" fill="none"/>
+    <circle cx="100" cy="100" r="65.8" stroke="#b45309" stroke-width="1.6" fill="none"/>
+    <g fill="#10b981" stroke="#065f46" stroke-width="1.4">
+      <path d="M29 118 C18 110, 20 96, 30 102 Z"/>
+      <path d="M26 98 C16 88, 20 74, 30 82 Z" fill="#34d399"/>
+      <path d="M32 78 C24 66, 30 54, 39 64 Z"/>
+      <path d="M171 118 C182 110, 180 96, 170 102 Z"/>
+      <path d="M174 98 C184 88, 180 74, 170 82 Z" fill="#34d399"/>
+      <path d="M168 78 C176 66, 170 54, 161 64 Z"/>
+    </g>
+    <g transform="translate(100, 24)">
+      <polygon points="-16,6 -10,-8 10,-8 16,6 0,12" fill="#fbbf24" stroke="#92400e" stroke-width="1.6"/>
+      <polygon points="0,-13 11,-2 0,9 -11,-2" fill="#10b981" stroke="#064e3b" stroke-width="1.6"/>
+      <polygon points="0,-8 6,-2 0,4 -6,-2" fill="#6ee7b7"/>
+    </g>
+    <g transform="translate(100, 172)">
+      <path d="M-26 -3 C-12 -8, 12 -8, 26 -3 L20 8 C8 4, -8 4, -20 8 Z" fill="#fbbf24" stroke="#92400e" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="0" cy="1" r="4.5" fill="#10b981" stroke="#064e3b" stroke-width="1.4"/>
+    </g>
+  </g>
+</svg>

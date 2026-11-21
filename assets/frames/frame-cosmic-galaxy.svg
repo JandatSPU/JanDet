@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shGalaxy" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#3b0764" flood-opacity="0.45"/>
+    </filter>
+    <linearGradient id="nebulaGrad" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="50%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#311068"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shGalaxy)">
+    <circle cx="100" cy="100" r="70" stroke="url(#nebulaGrad)" stroke-width="8.5" fill="none"/>
+    <circle cx="100" cy="100" r="74.2" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="4 8" fill="none"/>
+    <circle cx="100" cy="100" r="65.8" stroke="#e9d5ff" stroke-width="1.5" fill="none"/>
+    <path d="M54 24 C34 32, 24 56, 36 76 C44 90, 62 94, 72 88 C54 86, 42 70, 44 50 C46 36, 52 28, 54 24 Z" fill="#fde047" stroke="#b45309" stroke-width="1.8" stroke-linejoin="round"/>
+    <g transform="translate(156, 152) rotate(-22)">
+      <circle cx="0" cy="0" r="10" fill="#a855f7" stroke="#3b0764" stroke-width="1.6"/>
+      <ellipse cx="0" cy="0" rx="18" ry="4.5" stroke="#fde047" stroke-width="2.2" fill="none"/>
+    </g>
+    <path d="M154 34 L157 42 L165 45 L157 48 L154 56 L151 48 L143 45 L151 42 Z" fill="#fde047" stroke="#b45309" stroke-width="1.2"/>
+    <path d="M100 160 L102.5 167 L110 169.5 L102.5 172 L100 179 L97.5 172 L90 169.5 L97.5 167 Z" fill="#f472b6" stroke="#831843" stroke-width="1.2"/>
+  </g>
+</svg>

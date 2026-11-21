@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260" fill="none">
+  <defs>
+    <linearGradient id="bgLoy" x1="0" y1="0" x2="800" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#3730a3"/>
+    </linearGradient>
+    <radialGradient id="moonGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="65%" stop-color="#f59e0b" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Night Sky Background -->
+  <rect width="800" height="260" rx="22" fill="url(#bgLoy)"/>
+
+  <!-- Stars -->
+  <circle cx="65" cy="40" r="2.5" fill="#fef08a"/>
+  <circle cx="155" cy="28" r="2" fill="#e0e7ff"/>
+  <circle cx="240" cy="52" r="3" fill="#fef08a"/>
+  <circle cx="520" cy="36" r="2.5" fill="#fef08a"/>
+  <circle cx="735" cy="42" r="3" fill="#fef08a"/>
+  <circle cx="610" cy="60" r="2" fill="#e0e7ff"/>
+
+  <!-- Full Moon -->
+  <circle cx="685" cy="74" r="68" fill="url(#moonGlow)"/>
+  <circle cx="685" cy="74" r="38" fill="#fef08a"/>
+  <circle cx="672" cy="64" r="8" fill="#fde047" opacity="0.5"/>
+  <circle cx="697" cy="86" r="6" fill="#fde047" opacity="0.5"/>
+
+  <!-- Floating Sky Lanterns (โคมลอย) -->
+  <g transform="translate(95, 32)">
+    <rect x="0" y="0" width="26" height="34" rx="10" fill="#fb923c" stroke="#fef08a" stroke-width="2"/>
+    <circle cx="13" cy="32" r="5" fill="#fef08a"/>
+  </g>
+  <g transform="translate(185, 58) scale(0.8)">
+    <rect x="0" y="0" width="26" height="34" rx="10" fill="#f59e0b" stroke="#fef08a" stroke-width="2"/>
+    <circle cx="13" cy="32" r="5" fill="#fef08a"/>
+  </g>
+  <g transform="translate(565, 24) scale(0.9)">
+    <rect x="0" y="0" width="26" height="34" rx="10" fill="#fb923c" stroke="#fef08a" stroke-width="2"/>
+    <circle cx="13" cy="32" r="5" fill="#fef08a"/>
+  </g>
+
+  <!-- River Water & Shimmering Reflections -->
+  <path d="M0 195 Q 200 182 400 195 T 800 192 V 260 H 0 Z" fill="#1e3a8a" fill-opacity="0.75"/>
+  <path d="M0 218 Q 200 206 400 218 T 800 215 V 260 H 0 Z" fill="#172554" fill-opacity="0.85"/>
+  <rect x="645" y="205" width="80" height="5" rx="2.5" fill="#fef08a" opacity="0.55"/>
+  <rect x="658" y="218" width="55" height="4" rx="2" fill="#fef08a" opacity="0.4"/>
+  <rect x="100" y="225" width="75" height="4" rx="2" fill="#38bdf8" opacity="0.45"/>
+
+  <!-- Left Lotus Krathong with Candle -->
+  <g transform="translate(75, 118)">
+    <!-- Candle & Flame -->
+    <rect x="61" y="18" width="8" height="28" rx="3" fill="#fde047"/>
+    <path d="M65 2 C58 12 60 20 65 20 C70 20 72 12 65 2 Z" fill="#f97316"/>
+    <circle cx="65" cy="12" r="14" fill="#fef08a" opacity="0.35"/>
+    <!-- Lotus Petals -->
+    <path d="M25 65 L45 36 L65 65 Z" fill="#f43f5e"/>
+    <path d="M65 65 L85 36 L105 65 Z" fill="#f43f5e"/>
+    <path d="M42 68 L65 30 L88 68 Z" fill="#fb7185"/>
+    <path d="M12 68 L35 44 L52 68 Z" fill="#ec4899"/>
+    <path d="M78 68 L95 44 L118 68 Z" fill="#ec4899"/>
+    <!-- Banana Stem Base -->
+    <rect x="15" y="65" width="100" height="22" rx="11" fill="#15803d" stroke="#4ade80" stroke-width="2.5"/>
+    <ellipse cx="65" cy="92" rx="58" ry="6" fill="#fef08a" opacity="0.35"/>
+  </g>
+
+  <!-- Right Lotus Krathong & Night Market Delicacies -->
+  <g transform="translate(595, 128) scale(0.92)">
+    <rect x="61" y="18" width="8" height="28" rx="3" fill="#fde047"/>
+    <path d="M65 2 C58 12 60 20 65 20 C70 20 72 12 65 2 Z" fill="#f97316"/>
+    <path d="M25 65 L45 36 L65 65 Z" fill="#fb923c"/>
+    <path d="M65 65 L85 36 L105 65 Z" fill="#fb923c"/>
+    <path d="M42 68 L65 30 L88 68 Z" fill="#facc15"/>
+    <rect x="15" y="65" width="100" height="22" rx="11" fill="#15803d" stroke="#fde047" stroke-width="2.5"/>
+  </g>
+
+  <!-- Center Festival Title -->
+  <g transform="translate(400, 125)" text-anchor="middle">
+    <rect x="-165" y="-54" width="330" height="32" rx="16" fill="#312e81" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="0" y="-33" fill="#fef08a" font-family="Mitr, Prompt, sans-serif" font-size="14" font-weight="600" letter-spacing="1">🪷 LOY KRATHONG NIGHT MARKET</text>
+    <text x="0" y="8" fill="#ffffff" font-family="Mitr, Prompt, sans-serif" font-size="33" font-weight="700">เทศกาลลอยกระทง SPU</text>
+    <text x="0" y="38" fill="#bae6fd" font-family="Prompt, sans-serif" font-size="15" font-weight="500">อิ่มอร่อยตลาดนัดคืนเพ็ญ ชมจันทร์เต็มดวงและแสงเทียนริมสายน้ำ</text>
+  </g>
+</svg>

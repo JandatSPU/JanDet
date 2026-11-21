@@ -1,213 +1,148 @@
 /**
  * จานเด็ด SPU - แอปพลิเคชันหลัก (Main Application Engine)
- * ทำงานได้แบบ Standalone 100% เปิดไฟล์ index.html เข้าใช้งานได้ทันที
+ * เชื่อมต่อ Firebase Authentication และ Cloud Firestore แบบเรียลไทม์ (พร้อมใช้งานบน GitHub Pages)
  */
 
 // ============================================================================
-// 1. Data Store & LocalStorage Synchronization
+// 1. Live Application State (Synced Real-time via Cloud Firestore)
 // ============================================================================
 
-const STORAGE_KEYS = {
-  SETTINGS: 'spu_food_settings',
-  RESTAURANTS: 'spu_food_restaurants',
-  REVIEWS: 'spu_food_reviews',
-  NEWS: 'spu_food_news',
-  USERS: 'spu_food_users',
-  CURRENT_USER: 'spu_food_current_user',
+const LOCAL_PREF_KEYS = {
   DARK_MODE: 'spu_food_dark_mode',
-  ANALYTICS: 'spu_food_analytics'
+  VISITOR_UUID: 'spu_visitor_uuid'
 };
 
-class Store {
-  static get(key, fallback) {
-    try {
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : fallback;
-    } catch (e) {
-      console.warn(`Error reading ${key} from localStorage:`, e);
-      return fallback;
-    }
+const AppState = {
+  restaurants: [],
+  firestoreRestaurants: [],
+  curatedSyncAttempted: false,
+  reviews: [],
+  news: [],
+  users: [],
+  siteSettings: { ...DEFAULT_SETTINGS },
+  stats: {
+    pageViews: 0,
+    uniqueVisitors: 0,
+    dailyVisits: {}
+  },
+  currentUser: null,
+  firebaseReady: false,
+  restaurantsLoaded: false,
+  reviewsLoaded: false,
+  newsLoaded: false,
+  statsLoaded: false,
+  visitorTracked: false,
+  unsubscribers: []
+};
+
+function mergeRestaurantsWithCurated(firestoreList = []) {
+  const remote = Array.isArray(firestoreList) ? firestoreList : [];
+  const curated = typeof SPU_CURATED_RESTAURANTS !== 'undefined' && Array.isArray(SPU_CURATED_RESTAURANTS)
+    ? SPU_CURATED_RESTAURANTS
+    : [];
+  if (AppState.siteSettings?.seededRealShopsV5) {
+    return remote;
   }
+  const curatedById = new Map(curated.map(s => [s.id, s]));
+  const updatedRemote = remote.map(r => curatedById.has(r.id) ? { ...r, ...curatedById.get(r.id) } : r);
+  const existingIds = new Set(updatedRemote.map(r => r.id));
+  const existingNames = new Set(updatedRemote.map(r => (r.name || '').trim().toLowerCase()));
+  const missingCurated = curated.filter(shop =>
+    !existingIds.has(shop.id) && !existingNames.has((shop.name || '').trim().toLowerCase())
+  );
+  return [...updatedRemote, ...missingCurated];
+}
 
-  static set(key, val) {
-    try {
-      localStorage.setItem(key, JSON.stringify(val));
-    } catch (e) {
-      console.warn(`Error writing ${key} to localStorage:`, e);
-    }
-  }
+async function maybeSeedCuratedRestaurantsToFirestore() {
+  if (AppState.curatedSyncAttempted) return;
+  if (!isAdmin() || !AppState.restaurantsLoaded || !window.FirestoreService?.isConfigured()) return;
+  if (AppState.siteSettings?.seededRealShopsV5) return;
 
-  static init() {
-    const DATA_VERSION = 'spu_v5_backend_analytics';
-    const currentVer = localStorage.getItem('spu_data_version');
-    if (currentVer !== DATA_VERSION) {
-      Store.reset();
-      localStorage.setItem('spu_data_version', DATA_VERSION);
-      return;
+  const curated = typeof SPU_CURATED_RESTAURANTS !== 'undefined' && Array.isArray(SPU_CURATED_RESTAURANTS)
+    ? SPU_CURATED_RESTAURANTS
+    : [];
+  if (curated.length === 0) return;
+
+  AppState.curatedSyncAttempted = true;
+  try {
+    let syncedCount = 0;
+
+    for (const shop of curated) {
+      await window.FirestoreService.upsertRestaurant(shop.id, shop);
+      syncedCount++;
     }
 
-    if (!localStorage.getItem(STORAGE_KEYS.RESTAURANTS)) {
-      Store.set(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
+    await window.FirestoreService.updateSiteSettings({ seededRealShopsV5: true });
+    if (syncedCount > 0) {
+      showToast(`อัปเดตร้านอาหารจริง ${syncedCount} ร้านลง Cloud Firestore เรียบร้อย! 🍽️`, 'success');
     }
-    if (!localStorage.getItem(STORAGE_KEYS.REVIEWS)) {
-      Store.set(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.NEWS)) {
-      Store.set(STORAGE_KEYS.NEWS, INITIAL_NEWS);
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
-      Store.set(STORAGE_KEYS.USERS, INITIAL_USERS);
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
-      Store.set(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.CURRENT_USER)) {
-      Store.set(STORAGE_KEYS.CURRENT_USER, null);
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.ANALYTICS)) {
-      Store.set(STORAGE_KEYS.ANALYTICS, {
-        pageViews: 1,
-        uniqueVisitors: 1,
-        dailyVisits: {},
-        lastVisit: new Date().toISOString()
-      });
-    }
-  }
-
-  static reset() {
-    Store.set(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
-    Store.set(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-    Store.set(STORAGE_KEYS.NEWS, INITIAL_NEWS);
-    Store.set(STORAGE_KEYS.USERS, INITIAL_USERS);
-    Store.set(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-    Store.set(STORAGE_KEYS.CURRENT_USER, null);
-    Store.set(STORAGE_KEYS.ANALYTICS, {
-      pageViews: 1,
-      uniqueVisitors: 1,
-      dailyVisits: {},
-      lastVisit: new Date().toISOString()
-    });
+  } catch (err) {
+    AppState.curatedSyncAttempted = false;
+    console.warn('Auto-seed curated restaurants skipped:', err);
   }
 }
 
-// Initialize Storage
-Store.init();
+function formatFirebaseDate(val, fallbackStr) {
+  if (!val) return fallbackStr || '-';
+  if (typeof val === 'string') return val;
+  if (val && typeof val.toDate === 'function') {
+    return val.toDate().toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+  return fallbackStr || '-';
+}
 
 // ============================================================================
-// 1.1 Visitor Analytics & Backend Sync Engine (นับจำนวนคนเข้าชมเว็บ)
+// 1.1 Visitor Analytics & Real-Time Firestore Stats Engine
 // ============================================================================
 
 function getAnalytics() {
-  return Store.get(STORAGE_KEYS.ANALYTICS, {
-    pageViews: 1,
-    uniqueVisitors: 1,
-    dailyVisits: {},
-    lastVisit: new Date().toISOString()
-  });
+  return AppState.stats || {
+    pageViews: 0,
+    uniqueVisitors: 0,
+    dailyVisits: {}
+  };
 }
 
 function updatePublicVisitorUI(analytics) {
+  const stats = analytics || getAnalytics();
   const publicCountEl = document.getElementById('publicVisitorCount');
-  if (publicCountEl && analytics && analytics.pageViews) {
-    publicCountEl.textContent = analytics.pageViews.toLocaleString();
+  if (publicCountEl) {
+    publicCountEl.textContent = Number(stats.pageViews || 0).toLocaleString();
   }
   const publicUniqueEl = document.getElementById('publicUniqueVisitorCount');
-  if (publicUniqueEl && analytics && analytics.uniqueVisitors) {
-    publicUniqueEl.textContent = analytics.uniqueVisitors.toLocaleString();
+  if (publicUniqueEl) {
+    publicUniqueEl.textContent = Number(stats.uniqueVisitors || 0).toLocaleString();
   }
 }
 
-function syncCloudCounter(analytics, isNewVisitor) {
-  // Public real-world multi-client visitor counter API for production hosting
-  try {
-    fetch('https://api.counterapi.dev/v1/spu-canteen-dishes-review/visits/up')
-      .then(res => {
-        if (!res.ok) throw new Error('CounterAPI HTTP ' + res.status);
-        return res.json();
-      })
-      .then(cloudData => {
-        if (cloudData && typeof cloudData.count === 'number') {
-          analytics.pageViews = Math.max(analytics.pageViews || 0, cloudData.count);
-          Store.set(STORAGE_KEYS.ANALYTICS, analytics);
-          updatePublicVisitorUI(analytics);
-        }
-      })
-      .catch(() => {});
+async function trackVisitorHit() {
+  if (AppState.visitorTracked) return;
+  if (!window.FirestoreService || !window.FirestoreService.isConfigured()) {
+    updatePublicVisitorUI(AppState.stats);
+    return;
+  }
 
-    if (isNewVisitor) {
-      fetch('https://api.counterapi.dev/v1/spu-canteen-dishes-review/uniques/up')
-        .then(res => {
-          if (!res.ok) throw new Error('CounterAPI HTTP ' + res.status);
-          return res.json();
-        })
-        .then(uData => {
-          if (uData && typeof uData.count === 'number') {
-            analytics.uniqueVisitors = Math.max(analytics.uniqueVisitors || 0, uData.count);
-            Store.set(STORAGE_KEYS.ANALYTICS, analytics);
-            updatePublicVisitorUI(analytics);
-          }
-        })
-        .catch(() => {});
-    }
-  } catch (e) {}
-}
-
-function trackVisitorHit() {
-  const analytics = getAnalytics();
+  AppState.visitorTracked = true;
   const d = new Date();
   const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  
-  // Track Unique Visitor using local UUID
-  let visitorUuid = localStorage.getItem('spu_visitor_uuid');
+
+  let visitorUuid = null;
   let isNewVisitor = false;
-  if (!visitorUuid) {
-    visitorUuid = 'vis_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-    localStorage.setItem('spu_visitor_uuid', visitorUuid);
-    analytics.uniqueVisitors = (analytics.uniqueVisitors || 0) + 1;
-    isNewVisitor = true;
+  try {
+    visitorUuid = localStorage.getItem(LOCAL_PREF_KEYS.VISITOR_UUID);
+    if (!visitorUuid) {
+      visitorUuid = 'vis_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+      localStorage.setItem(LOCAL_PREF_KEYS.VISITOR_UUID, visitorUuid);
+      isNewVisitor = true;
+    }
+  } catch (e) {
+    isNewVisitor = false;
   }
 
-  // Increment Page Views
-  analytics.pageViews = (analytics.pageViews || 0) + 1;
-  if (!analytics.dailyVisits) analytics.dailyVisits = {};
-  analytics.dailyVisits[todayStr] = (analytics.dailyVisits[todayStr] || 0) + 1;
-  analytics.lastVisit = new Date().toISOString();
-
-  Store.set(STORAGE_KEYS.ANALYTICS, analytics);
-  updatePublicVisitorUI(analytics);
-
-  // If running via HTTP/HTTPS, attempt Node REST API first
-  if (window.location.protocol.startsWith('http')) {
-    try {
-      fetch('/api/visitors/hit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          visitorUuid,
-          isNewVisitor,
-          page: window.location.pathname,
-          referrer: document.referrer || 'direct'
-        })
-      }).then(res => {
-        if (!res.ok) throw new Error('Localhost backend not responding: ' + res.status);
-        return res.json();
-      }).then(data => {
-        if (data && data.pageViews) {
-          analytics.pageViews = data.pageViews;
-          analytics.uniqueVisitors = data.uniqueVisitors;
-          Store.set(STORAGE_KEYS.ANALYTICS, analytics);
-          updatePublicVisitorUI(analytics);
-        }
-      }).catch(() => {
-        // Fallback to Cloud Counter if Node server isn't running or on public web host
-        syncCloudCounter(analytics, isNewVisitor);
-      });
-    } catch (e) {
-      syncCloudCounter(analytics, isNewVisitor);
-    }
-  } else {
-    // Standalone file:// mode -> sync with Cloud Counter if network is accessible
-    syncCloudCounter(analytics, isNewVisitor);
+  try {
+    await window.FirestoreService.incrementVisitorHit(todayStr, isNewVisitor);
+  } catch (err) {
+    console.warn('Firestore visitor stats update notice:', err?.code || err?.message);
   }
 }
 
@@ -328,10 +263,66 @@ function closeModalOnBackdrop(event, backdropElement) {
 let currentFilterTag = 'all';
 let currentDetailRestaurantId = null;
 let currentReviewRating = 5;
+let currentAppView = 'restaurants';
+let currentCheckinSubTab = 'calendar';
+
+function switchAppView(viewId = 'restaurants') {
+  const validViews = ['restaurants', 'roulette', 'checkin', 'news', 'leaderboard'];
+  const targetView = validViews.includes(viewId) ? viewId : 'restaurants';
+  currentAppView = targetView;
+
+  document.querySelectorAll('.app-view-section').forEach(sec => {
+    if (sec.getAttribute('data-view-group') === targetView) {
+      sec.classList.add('active-view');
+    } else {
+      sec.classList.remove('active-view');
+    }
+  });
+
+  document.querySelectorAll('.nav-link[data-view], .mob-nav-btn[data-view]').forEach(btn => {
+    if (btn.getAttribute('data-view') === targetView) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  if (targetView === 'roulette' && typeof drawWheel === 'function') {
+    setTimeout(() => {
+      drawWheel();
+      const resEl = document.getElementById('budgetComboResult');
+      if (typeof renderBudgetComboIdleState === 'function' && resEl && !resEl.innerHTML.trim()) {
+        renderBudgetComboIdleState();
+      }
+    }, 40);
+  }
+
+  SoundFX.playTick();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleSearchFiltersDrawer() {
+  const grid = document.getElementById('advancedFilterGrid');
+  const btn = document.getElementById('toggleFilterDrawerBtn');
+  if (!grid) return;
+  const isOpen = grid.classList.toggle('open');
+  if (btn) {
+    btn.classList.toggle('active', isOpen);
+    btn.innerHTML = isOpen ? '🔼 ซ่อนตัวกรอง' : '🎛️ ตัวกรองเพิ่มเติม';
+  }
+  SoundFX.playTick();
+}
+
+function switchCheckinSubTab(subTab = 'calendar') {
+  currentCheckinSubTab = subTab === 'closet' ? 'closet' : 'calendar';
+  renderDailyCheckIn();
+  scheduleMidnightCheckInRefresh();
+  SoundFX.playTick();
+}
 
 // Current User Helpers
 function getCurrentUser() {
-  return Store.get(STORAGE_KEYS.CURRENT_USER, null);
+  return AppState.currentUser;
 }
 
 function grantAdminFullRewards(user) {
@@ -347,16 +338,29 @@ function grantAdminFullRewards(user) {
   ];
   const allBadgeIds = BADGES_LIST.map(b => b.id);
 
-  user.unlockedFrames = Array.from(new Set([...(user.unlockedFrames || []), ...allFrameIds]));
-  user.unlockedTitles = Array.from(new Set([...(user.unlockedTitles || []), ...allTitles]));
-  user.badges = Array.from(new Set([...(user.badges || []), ...allBadgeIds]));
+  const prevFrames = user.unlockedFrames || [];
+  const prevTitles = user.unlockedTitles || [];
+  const prevBadges = user.badges || [];
 
-  // Sync to USERS in local storage
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const idx = users.findIndex(u => u.id === user.id);
-  if (idx > -1) {
-    users[idx] = { ...users[idx], ...user };
-    Store.set(STORAGE_KEYS.USERS, users);
+  const nextFrames = Array.from(new Set([...prevFrames, ...allFrameIds]));
+  const nextTitles = Array.from(new Set([...prevTitles, ...allTitles]));
+  const nextBadges = Array.from(new Set([...prevBadges, ...allBadgeIds]));
+
+  const changed =
+    nextFrames.length !== prevFrames.length ||
+    nextTitles.length !== prevTitles.length ||
+    nextBadges.length !== prevBadges.length;
+
+  user.unlockedFrames = nextFrames;
+  user.unlockedTitles = nextTitles;
+  user.badges = nextBadges;
+
+  if (changed && window.FirestoreService?.isConfigured() && (user.uid || user.id)) {
+    window.FirestoreService.adminUpdateUser(user.uid || user.id, {
+      unlockedFrames: nextFrames,
+      unlockedTitles: nextTitles,
+      badges: nextBadges
+    }).catch(() => {});
   }
 }
 
@@ -364,7 +368,7 @@ function setCurrentUser(user) {
   if (user && user.role === 'admin') {
     grantAdminFullRewards(user);
   }
-  Store.set(STORAGE_KEYS.CURRENT_USER, user);
+  AppState.currentUser = user || null;
   renderNavUser();
   if (typeof renderDailyCheckIn === 'function') renderDailyCheckIn();
   if (typeof renderLeaderboard === 'function') renderLeaderboard();
@@ -373,8 +377,7 @@ function setCurrentUser(user) {
 
 function isAdmin() {
   const user = getCurrentUser();
-  if (!user) return false;
-  return user.role === 'admin' || user.email === 'admin@spu.ac.th' || user.id === 'usr_admin';
+  return Boolean(user && user.role === 'admin');
 }
 
 function requireAuth(actionName = "ทำรายการนี้") {
@@ -392,14 +395,26 @@ function requireAuth(actionName = "ทำรายการนี้") {
 // ============================================================================
 
 function applyTheme(themeId) {
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  settings.activeTheme = themeId;
-  Store.set(STORAGE_KEYS.SETTINGS, settings);
+  const normalizedId = themeId === 'classic' ? 'spu-classic' : themeId;
+  const safeThemeId = THEMES[normalizedId] ? normalizedId : 'spu-classic';
+  AppState.siteSettings.activeTheme = safeThemeId;
 
-  const themeConfig = THEMES[themeId] || THEMES['spu-classic'];
-  document.documentElement.setAttribute('data-festival', themeId);
+  const themeConfig = THEMES[safeThemeId] || THEMES['spu-classic'];
+  document.documentElement.setAttribute('data-festival', safeThemeId);
+  if (document.body) {
+    document.body.setAttribute('data-festival', safeThemeId);
+  }
 
-  // Update Ticker Pill
+  // Apply explicit CSS custom properties for the active theme + current light/dark mode
+  const isDark = document.body?.classList.contains('dark-mode') || document.documentElement.getAttribute('data-theme-mode') === 'dark';
+  const varsToApply = isDark ? (themeConfig.darkVars || themeConfig.lightVars) : themeConfig.lightVars;
+  if (varsToApply) {
+    Object.entries(varsToApply).forEach(([prop, val]) => {
+      document.documentElement.style.setProperty(prop, val);
+    });
+  }
+
+  // 1. Update Ticker Pill
   const pillIcon = document.getElementById('themePillIcon');
   const pillName = document.getElementById('themePillName');
   if (pillIcon && pillName) {
@@ -407,58 +422,159 @@ function applyTheme(themeId) {
     pillName.textContent = themeConfig.name;
   }
 
-  // Update Brand Logo Icon
+  // 2. Update Brand Logo Icon
   const brandIcon = document.getElementById('brandLogoIcon');
   if (brandIcon) {
     brandIcon.textContent = themeConfig.particleEmoji;
   }
 
-  // Render Festival Falling Particles
-  renderFestivalParticles(themeConfig.particleEmoji);
+  // 3. Update Hero Tasting Board Showcase (respects Admin Custom Showcase if set)
+  if (typeof applyHeroShowcase === 'function') {
+    applyHeroShowcase(themeConfig);
+  }
+
+  // 4. Render Festival Floating Emojis (Hero + Bottom Floating Lane)
+  renderFestivalParticles(themeConfig.particleEmoji, safeThemeId);
+
+  // 5. Refresh Roulette Wheel Colors
+  if (typeof drawWheel === 'function') {
+    setTimeout(() => drawWheel(), 30);
+  }
 }
 
-function renderFestivalParticles(emoji = '🍛') {
-  const container = document.getElementById('festivalParticles');
-  if (!container) return;
-  container.innerHTML = '';
+function renderFestivalParticles(emoji = '🍽️', themeId = 'spu-classic') {
+  const themeConfig = THEMES[themeId] || THEMES['spu-classic'];
+  const emojiPool = Array.isArray(themeConfig?.floatingEmojis) && themeConfig.floatingEmojis.length > 0
+    ? themeConfig.floatingEmojis
+    : [emoji];
 
-  const particleCount = 14;
-  for (let i = 0; i < particleCount; i++) {
-    const particle = document.createElement('div');
-    particle.className = 'particle';
-    particle.textContent = emoji;
-    particle.style.left = `${Math.random() * 95}%`;
-    particle.style.fontSize = `${1.2 + Math.random() * 1.5}rem`;
-    particle.style.animationDuration = `${8 + Math.random() * 8}s`;
-    particle.style.animationDelay = `${Math.random() * 5}s`;
-    container.appendChild(particle);
+  // 1. Hero Background Left-Right Floating Emojis
+  const container = document.getElementById('festivalParticles');
+  if (container) {
+    container.innerHTML = '';
+    const count = 10;
+    for (let i = 0; i < count; i++) {
+      const span = document.createElement('span');
+      span.className = `festival-particle ${i % 2 === 0 ? 'sway-right' : 'sway-left'}`;
+      span.textContent = emojiPool[i % emojiPool.length];
+      span.style.top = `${8 + ((i * 9) % 80)}%`;
+      span.style.animationDuration = `${16 + (i % 5) * 3.5}s`;
+      span.style.animationDelay = `-${(i * 2.3).toFixed(1)}s`;
+      span.style.fontSize = `${2.6 + (i % 3) * 0.55}rem`;
+      container.appendChild(span);
+    }
+  }
+
+  // 2. Full-Page Ambient Background Left-Right Floating Emojis
+  const bottomLane = document.getElementById('bottomFestivalFloatLane');
+  if (bottomLane) {
+    bottomLane.innerHTML = '';
+    const bgCount = 14;
+    for (let i = 0; i < bgCount; i++) {
+      const item = document.createElement('span');
+      item.className = `bottom-float-emoji ${i % 2 === 0 ? 'sway-right' : 'sway-left'}`;
+      item.textContent = emojiPool[i % emojiPool.length];
+      item.style.top = `${6 + ((i * 6.8) % 86)}%`;
+      item.style.fontSize = `${2.75 + (i % 4) * 0.5}rem`;
+      item.style.animationDuration = `${18 + (i % 5) * 4}s`;
+      item.style.animationDelay = `-${(i * 2.1).toFixed(1)}s`;
+      bottomLane.appendChild(item);
+    }
   }
 }
 
 function toggleDarkMode() {
   const isDark = document.body.classList.toggle('dark-mode');
   document.documentElement.setAttribute('data-theme-mode', isDark ? 'dark' : 'light');
-  Store.set(STORAGE_KEYS.DARK_MODE, isDark);
-  
+  try {
+    localStorage.setItem(LOCAL_PREF_KEYS.DARK_MODE, JSON.stringify(isDark));
+  } catch (e) {}
+
   const toggleBtn = document.getElementById('themeToggleBtn');
   if (toggleBtn) {
     toggleBtn.textContent = isDark ? '☀️' : '🌙';
   }
+
+  applyTheme(AppState.siteSettings.activeTheme || 'spu-classic');
 }
 
 function initDarkMode() {
-  const savedDark = Store.get(STORAGE_KEYS.DARK_MODE, false);
+  let savedDark = false;
+  try {
+    savedDark = JSON.parse(localStorage.getItem(LOCAL_PREF_KEYS.DARK_MODE) || 'false');
+  } catch (e) {
+    savedDark = false;
+  }
   if (savedDark) {
     document.body.classList.add('dark-mode');
     document.documentElement.setAttribute('data-theme-mode', 'dark');
     const toggleBtn = document.getElementById('themeToggleBtn');
     if (toggleBtn) toggleBtn.textContent = '☀️';
   }
+  applyTheme(AppState.siteSettings.activeTheme || 'spu-classic');
 }
 
 // ============================================================================
-// 6. Navigation & User Header
+// 6. Navigation, User Header & Firebase Authentication
 // ============================================================================
+
+function ensureFirebaseAuthReady() {
+  if (window.location.protocol === 'file:' && !window.FIREBASE_BRIDGE_LOADED) {
+    showToast('⚠️ ระบบ Firebase ต้องรันผ่าน Web Server (เช่น GitHub Pages หรือ start-server.bat / localhost:3000)', 'warning');
+    return false;
+  }
+  if (!window.AuthService || !window.AuthService.isConfigured()) {
+    showToast('⚠️ ยังไม่ได้ตั้งค่า firebaseConfig ในไฟล์ js/firebase-config.js กรุณานำค่าจาก Firebase Console มาใส่ก่อนใช้งาน', 'warning');
+    return false;
+  }
+  return true;
+}
+
+function translateFirebaseAuthError(err) {
+  const code = err?.code || '';
+  if (err?.message === 'FIREBASE_NOT_CONFIGURED') {
+    return 'ยังไม่ได้ตั้งค่า firebaseConfig ใน js/firebase-config.js';
+  }
+  if (code.startsWith('auth/api-key-not-valid') || code === 'auth/invalid-api-key') {
+    return 'API Key ของ Firebase ไม่ถูกต้อง (กรุณาคัดลอก firebaseConfig ของจริงจากหน้า Project settings > Your apps ใน Firebase Console มาใส่ใหม่)';
+  }
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง';
+    case 'auth/email-already-in-use':
+      return 'อีเมลนี้ถูกสมัครใช้งานไว้แล้ว กรุณาเข้าสู่ระบบหรือใช้ปุ่มลืมรหัสผ่าน';
+    case 'auth/invalid-email':
+      return 'รูปแบบอีเมลไม่ถูกต้อง';
+    case 'auth/weak-password':
+      return 'รหัสผ่านต้องมีความยาวอย่างน้อย 6-8 ตัวอักษรและคาดเดาได้ยาก';
+    case 'auth/too-many-requests':
+      return 'มีการลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'ปิดหน้าต่างเลือกบัญชี Google ก่อนเข้าสู่ระบบเสร็จสิ้น';
+    case 'auth/popup-blocked':
+      return 'เบราว์เซอร์บล็อกป๊อปอัป Google กรุณาอนุญาตป๊อปอัปแล้วลองใหม่';
+    case 'auth/unauthorized-domain':
+      return 'โดเมนนี้ยังไม่ได้รับอนุญาตใน Firebase Authentication > Settings > Authorized domains';
+    case 'auth/operation-not-allowed':
+      return 'กรุณาเปิดใช้งาน Sign-in method นี้ใน Firebase Console ก่อน';
+    case 'auth/network-request-failed':
+      return 'เชื่อมต่ออินเทอร์เน็ตหรือ Firebase ไม่สำเร็จ กรุณาลองใหม่';
+    default:
+      return err?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อระบบยืนยันตัวตน';
+  }
+}
+
+function renderFramedAvatar(avatarSrc, frameId = 'frame-none', sizePx = 44, extraImgClass = '', altText = 'Avatar') {
+  const validFrame = frameId && typeof PROFILE_FRAMES !== 'undefined' && PROFILE_FRAMES.some(f => f.id === frameId)
+    ? frameId
+    : 'frame-none';
+  const safeSrc = avatarSrc || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+  const safeAlt = String(altText || 'Avatar').replace(/"/g, '&quot;');
+  return `<span class="avatar-frame-wrap ${validFrame}" style="--av-size: ${sizePx}px;"><img src="${safeSrc}" class="user-avatar ${extraImgClass} ${validFrame}" alt="${safeAlt}" style="width: ${sizePx}px; height: ${sizePx}px; border-radius: 50%; object-fit: cover;"><img src="assets/frames/${validFrame}.svg?v=20261118_6" class="avatar-frame-overlay" alt="" aria-hidden="true"></span>`;
+}
 
 function renderNavUser() {
   const container = document.getElementById('navUserContainer');
@@ -468,29 +584,27 @@ function renderNavUser() {
   if (user) {
     const adminPill = user.role === 'admin'
       ? `<button type="button" class="btn btn-sm btn-admin" onclick="openAdminModal()" title="แผงควบคุมระบบ (เข้าถึงได้เฉพาะแอดมิน)" style="font-size: 0.8rem; padding: 0.35rem 0.65rem;">
-           👑 แผงแอดมิน
+           แผงแอดมิน
          </button>`
       : '';
 
     container.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
         ${adminPill}
-        <button type="button" class="user-menu-btn" onclick="openProfileModal()">
-          <img src="${user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}" class="user-avatar ${user.equippedFrame || ''}" alt="${user.name}">
-          <span style="font-weight: 700; font-size: 0.875rem; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            ${user.name}
-          </span>
-          <span class="user-title-badge">🎖️ ${user.customTitle || 'นักชิมมือใหม่'}</span>
+        <button type="button" class="user-menu-btn" onclick="openProfileModal()" title="ดูโปรไฟล์และตู้เสื้อผ้ากรอบรูป">
+          ${renderFramedAvatar(user.avatar, user.equippedFrame || 'frame-none', 32, '', user.name)}
+          <span class="user-menu-name">${user.name}</span>
+          <span class="user-title-badge">${user.customTitle || 'นักชิมมือใหม่'}</span>
         </button>
-        <button type="button" class="btn btn-sm btn-outline" onclick="handleLogout()" title="ออกจากระบบ">
-          🚪
+        <button type="button" class="btn btn-sm btn-outline" onclick="handleLogout()" title="ออกจากระบบ" style="padding: 0.35rem 0.65rem; font-size: 0.8rem;">
+          ออกจากระบบ
         </button>
       </div>
     `;
   } else {
     container.innerHTML = `
       <button type="button" class="btn btn-sm btn-primary" onclick="openAuthModal()">
-        🔑 เข้าสู่ระบบ
+        เข้าสู่ระบบ
       </button>
     `;
   }
@@ -512,14 +626,14 @@ function renderAdminOnlyButtons() {
     if (rstSlot) {
       rstSlot.innerHTML = `
         <button type="button" class="btn btn-outline btn-sm" onclick="openAddRestaurantModal()">
-          ➕ เสนอร้านอาหารใหม่ (Admin)
+          เพิ่มร้านอาหารใหม่
         </button>
       `;
     }
     if (newsSlot) {
       newsSlot.innerHTML = `
         <button type="button" class="btn btn-outline btn-sm" onclick="openAddNewsModal()">
-          📢 แอดมินเพิ่มข่าวใหม่
+          เพิ่มข่าวสารใหม่
         </button>
       `;
     }
@@ -529,8 +643,7 @@ function renderAdminOnlyButtons() {
   }
 
   // Refresh empty state when auth status changes
-  const allRestaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
-  if (allRestaurants.length === 0) {
+  if (AppState.restaurants.length === 0) {
     if (typeof filterRestaurants === 'function') filterRestaurants();
     if (typeof drawWheel === 'function') drawWheel();
   }
@@ -544,29 +657,66 @@ function openAdminAccessModal() {
   openModal('adminAccessModal');
 }
 
-function handleAdminLoginSubmit(event) {
+async function handleAdminLoginSubmit(event) {
   event.preventDefault();
-  const emailInput = document.getElementById('adminLoginEmail')?.value.trim();
-  const passwordInput = document.getElementById('adminLoginPassword')?.value;
-  const errBox = document.getElementById('adminLoginError');
+  const emailInput = (document.getElementById('adminLoginEmail')?.value || '').trim();
+  const passwordInput = document.getElementById('adminLoginPassword')?.value || '';
 
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const adminUser = users.find(u => 
-    u.email.toLowerCase() === emailInput.toLowerCase() && 
-    u.password === passwordInput && 
-    u.role === 'admin'
-  );
-
-  if (adminUser) {
-    setCurrentUser(adminUser);
+  // Local test mode fallback when Firebase is not configured yet
+  if (!window.AuthService || !window.AuthService.isConfigured()) {
+    const localAdminProfile = {
+      id: 'local_admin_test',
+      uid: 'local_admin_test',
+      name: 'ผู้ดูแลระบบ SPU (โหมดทดสอบ Local)',
+      email: emailInput || 'local-admin',
+      role: 'admin',
+      userType: 'บุคลากร',
+      faculty: 'ส่วนกลาง ม.ศรีปทุม',
+      checkInStreak: 60,
+      equippedFrame: 'frame-grand-emperor',
+      customTitle: 'SPU Food Master'
+    };
+    setCurrentUser(localAdminProfile);
     closeModal('adminAccessModal');
-    if (errBox) errBox.style.display = 'none';
     SoundFX.playWin();
-    showToast(`🔓 เข้าสู่ระบบผู้ดูแลเรียบร้อย ยินดีต้อนรับคุณ ${adminUser.name}!`, 'success');
+    showToast('🔓 เข้าสู่โหมดทดสอบผู้ดูแลระบบ (Local Admin Preview) สำเร็จ!', 'success');
     setTimeout(() => openAdminModal(), 200);
-  } else {
-    if (errBox) errBox.style.display = 'block';
+    return;
+  }
+
+  if (!ensureFirebaseAuthReady()) return;
+
+  const errBox = document.getElementById('adminLoginError');
+  const submitBtn = event.target?.querySelector('button[type="submit"]');
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (errBox) errBox.style.display = 'none';
+
+  try {
+    const profile = await window.AuthService.loginWithEmail(emailInput, passwordInput);
+    if (!profile || profile.role !== 'admin') {
+      await window.AuthService.logout();
+      if (errBox) {
+        errBox.textContent = '❌ บัญชีนี้ไม่มีสิทธิ์แอดมิน (ต้องตั้งค่า role เป็น "admin" ใน Firestore Console ก่อน)';
+        errBox.style.display = 'block';
+      }
+      SoundFX.playTick();
+      return;
+    }
+
+    setCurrentUser(profile);
+    closeModal('adminAccessModal');
+    SoundFX.playWin();
+    showToast(`🔓 เข้าสู่ระบบผู้ดูแลเรียบร้อย ยินดีต้อนรับคุณ ${profile.name}!`, 'success');
+    setTimeout(() => openAdminModal(), 200);
+  } catch (err) {
+    if (errBox) {
+      errBox.textContent = `❌ ${translateFirebaseAuthError(err)}`;
+      errBox.style.display = 'block';
+    }
     SoundFX.playTick();
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
@@ -583,37 +733,91 @@ function switchAuthTab(tabId, btn) {
   if (target) target.classList.add('active');
 }
 
-function handleLoginSubmit(event) {
+async function handleLoginSubmit(event) {
   event.preventDefault();
+  if (!ensureFirebaseAuthReady()) return;
+
   const email = (document.getElementById('loginEmail')?.value || '').trim();
   const password = document.getElementById('loginPassword')?.value || '';
+  const submitBtn = event.target?.querySelector('button[type="submit"]');
 
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const found = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+  if (submitBtn) submitBtn.disabled = true;
 
-  if (found) {
-    setCurrentUser(found);
+  try {
+    const profile = await window.AuthService.loginWithEmail(email, password);
+    setCurrentUser(profile);
     closeModal('authModal');
-    // Clear inputs
+
     const elEmail = document.getElementById('loginEmail');
     const elPass = document.getElementById('loginPassword');
     if (elEmail) elEmail.value = '';
     if (elPass) elPass.value = '';
+
     SoundFX.playWin();
-    showToast(`ยินดีต้อนรับคุณ ${found.name}! เข้าสู่ระบบสำเร็จ`, 'success');
-  } else {
+    showToast(`ยินดีต้อนรับคุณ ${profile.name}! เข้าสู่ระบบสำเร็จ`, 'success');
+  } catch (err) {
     SoundFX.playTick();
-    showToast('อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง', 'error');
+    showToast(translateFirebaseAuthError(err), 'error');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
-function handleRegisterSubmit(event) {
+async function handleForgotPassword() {
+  if (!ensureFirebaseAuthReady()) return;
+
+  const emailInput = document.getElementById('loginEmail');
+  const email = (emailInput?.value || '').trim();
+  if (!email) {
+    showToast('กรุณากรอกอีเมลในช่องด้านบนก่อน แล้วกดปุ่มลืมรหัสผ่านอีกครั้ง', 'warning');
+    emailInput?.focus();
+    return;
+  }
+
+  try {
+    await window.AuthService.sendPasswordReset(email);
+    showToast(`ส่งลิงก์รีเซ็ตรหัสผ่านไปที่ ${email} แล้ว (กรุณาเช็กกล่องจดหมายหรือ Junk Mail)`, 'success');
+  } catch (err) {
+    showToast(translateFirebaseAuthError(err), 'error');
+  }
+}
+
+function togglePasswordVisibility(inputId, btnEl) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPassword = input.type === 'password';
+  input.type = isPassword ? 'text' : 'password';
+  if (btnEl) {
+    btnEl.innerHTML = isPassword ? '🙈 ซ่อนรหัส' : '👁️ ดูรหัส';
+    btnEl.classList.toggle('showing', isPassword);
+  }
+}
+
+function getEffectiveMemberId(user) {
+  if (!user) return 'SPU-100000';
+  const raw = String(user.studentId || '').trim();
+  if (raw && raw !== '-') return raw;
+  const seed = String(user.uid || user.id || user.email || user.name || 'spu');
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+  }
+  const num = (Math.abs(hash) % 900000) + 100000;
+  return `SPU-${num}`;
+}
+
+async function handleRegisterSubmit(event) {
   event.preventDefault();
-  const name = (document.getElementById('regName')?.value || '').trim();
+  if (!ensureFirebaseAuthReady()) return;
+
   const email = (document.getElementById('regEmail')?.value || '').trim();
+  const name = (document.getElementById('regName')?.value || '').trim() || (email ? email.split('@')[0] : 'สมาชิกจานเด็ด SPU');
   const userType = document.getElementById('regUserType')?.value || 'นักศึกษา';
-  const studentId = (document.getElementById('regStudentId')?.value || '').trim() || (userType === 'นักศึกษา' ? '67' + Math.floor(100000 + Math.random() * 900000) : 'SPU-' + Math.floor(1000 + Math.random() * 9000));
-  const faculty = document.getElementById('regFaculty')?.value || (userType === 'นักศึกษา' ? 'คณะเทคโนโลยีสารสนเทศ' : 'สำนักวิชาการ / ส่วนกลาง');
+  const rawStudentId = (document.getElementById('regStudentId')?.value || '').trim();
+  const studentId = (rawStudentId && rawStudentId !== '-')
+    ? rawStudentId
+    : getEffectiveMemberId({ email, name });
+  const faculty = (document.getElementById('regFaculty')?.value || '').trim() || 'ม.ศรีปทุม';
   const phone = (document.getElementById('regPhone')?.value || '').trim() || '-';
   const password = document.getElementById('regPassword')?.value || '';
 
@@ -622,308 +826,60 @@ function handleRegisterSubmit(event) {
     return;
   }
 
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-    showToast('อีเมลนี้ถูกใช้งานแล้วในระบบ กรุณาใช้อีเมลอื่นหรือเข้าสู่ระบบ', 'error');
-    return;
-  }
+  const submitBtn = event.target?.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
 
-  const nowStr = new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
+  try {
+    const profile = await window.AuthService.registerWithEmail({
+      email,
+      password,
+      name,
+      studentId,
+      faculty,
+      phone,
+      userType
+    });
 
-  const newUser = {
-    id: `usr_${Date.now()}`,
-    name,
-    studentId,
-    faculty,
-    phone,
-    email,
-    password,
-    role: email.toLowerCase().includes('admin') ? 'admin' : 'student',
-    userType,
-    status: 'อนุมัติแล้ว',
-    applicationNotes: 'สมัครผ่านระบบเว็บไซต์ จานเด็ด SPU',
-    avatar: `https://images.unsplash.com/photo-${1534528741775 + (users.length % 100)}?w=150&auto=format&fit=crop&q=80`,
-    badges: ["newbie"],
-    favorites: [],
-    checkInStreak: 0,
-    lastCheckInDate: null,
-    unlockedFrames: ["frame-none"],
-    equippedFrame: "frame-none",
-    customTitle: "นักชิมมือใหม่",
-    unlockedTitles: ["นักชิมมือใหม่"],
-    createdAt: nowStr
-  };
-
-  users.push(newUser);
-  Store.set(STORAGE_KEYS.USERS, users);
-  setCurrentUser(newUser);
-  closeModal('authModal');
-  SoundFX.playWin();
-  showToast(`สมัครสมาชิกสำเร็จ! ยินดีต้อนรับคุณ ${name} สู่จานเด็ด SPU 🎉`, 'success');
-  renderLeaderboard();
-
-  // If connected to localhost backend server, notify REST API
-  if (window.location.protocol.startsWith('http')) {
-    try {
-      fetch('/api/users/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser)
-      }).catch(() => {});
-    } catch (e) {}
+    setCurrentUser(profile);
+    closeModal('authModal');
+    event.target?.reset?.();
+    SoundFX.playWin();
+    showToast(`สมัครสมาชิกสำเร็จ! ยินดีต้อนรับคุณ ${profile.name} สู่จานเด็ด SPU 🎉`, 'success');
+  } catch (err) {
+    SoundFX.playTick();
+    showToast(translateFirebaseAuthError(err), 'error');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
 // ----------------------------------------------------------------------------
-// Google Cloud Console OAuth 2.0 & Identity Services (GIS)
+// Firebase Google Sign-In
 // ----------------------------------------------------------------------------
 
 function initGoogleSignIn() {
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  const clientId = settings.googleClientId ? settings.googleClientId.trim() : "";
-  const statusBadge = document.getElementById('googleClientIdStatus');
-
-  if (statusBadge) {
-    if (clientId) {
-      statusBadge.innerHTML = `🟢 Google OAuth: <strong title="${clientId}">${clientId.substring(0, 16)}...</strong>`;
-    } else {
-      statusBadge.innerHTML = `⚠️ Google Client ID: <em>ยังไม่ได้ตั้งค่า</em>`;
-    }
-  }
-
-  const slot = document.getElementById('googleSignInButtonSlot');
   const customBtn = document.getElementById('googleCustomSignInBtn');
-
-  // If Client ID is provided and GIS library is loaded
-  if (clientId && window.google && window.google.accounts && window.google.accounts.id) {
-    try {
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleGoogleCredentialResponse,
-        auto_select: false,
-        cancel_on_tap_outside: true
-      });
-
-      if (slot) {
-        slot.innerHTML = '';
-        window.google.accounts.id.renderButton(slot, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          text: 'signin_with',
-          shape: 'pill',
-          logo_alignment: 'left',
-          width: 280
-        });
-        slot.style.display = 'flex';
-      }
-      if (customBtn) customBtn.style.display = 'none';
-    } catch (err) {
-      console.warn("GIS notice (likely running via file:/// origin):", err);
-      if (slot) slot.style.display = 'none';
-      if (customBtn) customBtn.style.display = 'flex';
-    }
-  } else {
-    if (slot) {
-      slot.innerHTML = '';
-      slot.style.display = 'none';
-    }
-    if (customBtn) customBtn.style.display = 'flex';
-  }
+  if (customBtn) customBtn.style.display = 'flex';
 }
 
-function parseJwt(token) {
+async function triggerGoogleSignIn() {
+  if (!ensureFirebaseAuthReady()) return;
+
+  const btn = document.getElementById('googleCustomSignInBtn');
+  if (btn) btn.disabled = true;
+
   try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    return JSON.parse(jsonPayload);
-  } catch (e) {
-    console.warn("Error decoding Google JWT:", e);
-    return null;
-  }
-}
-
-function handleGoogleCredentialResponse(response) {
-  if (!response || !response.credential) {
-    showToast('การเชื่อมต่อกับบัญชี Google ล้มเหลว กรุณาลองใหม่อีกครั้ง', 'error');
-    return;
-  }
-  const payload = parseJwt(response.credential);
-  if (!payload || !payload.email) {
-    showToast('ไม่สามารถดึงข้อมูลบัญชี Google ได้ กรุณาลองใหม่อีกครั้ง', 'error');
-    return;
-  }
-
-  processGoogleUser({
-    email: payload.email,
-    name: payload.name || payload.email.split('@')[0],
-    avatar: payload.picture || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`,
-    googleSub: payload.sub
-  });
-}
-
-let googleTokenClient = null;
-
-function triggerGoogleSignIn() {
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  const clientId = settings.googleClientId ? settings.googleClientId.trim() : "";
-
-  // If Client ID is not configured yet, notify user cleanly without grey prompt()
-  if (!clientId) {
-    if (isAdmin()) {
-      showToast('⚠️ ยังไม่ได้ระบุ Google Client ID กรุณากำหนดค่าในแผงควบคุมระบบ', 'warning');
-      openGoogleConfigModal();
-    } else {
-      showToast('⚠️ ระบบล็อกอิน Google กำลังรอผู้ดูแลระบบเชื่อมต่อ Client ID (กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้ / รหัสผ่าน)', 'info');
-    }
-    return;
-  }
-
-  // 1. Try Google Identity Services OAuth2 Token Client (Opens native Google account selector popup)
-  if (window.google?.accounts?.oauth2) {
-    try {
-      if (!googleTokenClient) {
-        googleTokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'email profile openid',
-          callback: async (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-              await fetchAndProcessGoogleUser(tokenResponse.access_token);
-            } else if (tokenResponse && tokenResponse.error) {
-              console.warn("Google OAuth error:", tokenResponse.error);
-              showToast('การล็อกอินด้วย Google ไม่สำเร็จหรือถูกยกเลิก', 'warning');
-            }
-          },
-          error_callback: (err) => {
-            console.error("Google Token Client error:", err);
-            showToast('ไม่สามารถเปิดหน้าต่าง Google Login ได้ กรุณาตรวจสอบ Client ID และการอนุญาตป๊อปอัปของเบราว์เซอร์', 'error');
-          }
-        });
-      }
-      googleTokenClient.requestAccessToken({ prompt: 'select_account' });
-      return;
-    } catch (err) {
-      console.warn("Error calling Google Token Client:", err);
-    }
-  }
-
-  // 2. Fallback to GIS ID Prompt if available
-  if (window.google?.accounts?.id) {
-    try {
-      window.google.accounts.id.prompt((notification) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          showToast('กรุณาคลิกปุ่ม "Sign in with Google" โดยตรง หรือปิดบล็อกเกอร์ป๊อปอัป', 'info');
-        }
-      });
-      return;
-    } catch (e) {
-      console.warn("GIS prompt error:", e);
-    }
-  }
-
-  showToast('ไม่สามารถโหลดระบบ Google Sign-In ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต', 'error');
-}
-
-async function fetchAndProcessGoogleUser(accessToken) {
-  try {
-    showToast('กำลังเชื่อมต่อข้อมูลโปรไฟล์ Google...', 'info');
-    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const userInfo = await res.json();
-    processGoogleUser({
-      email: userInfo.email,
-      name: userInfo.name || userInfo.email.split('@')[0],
-      avatar: userInfo.picture || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`,
-      googleSub: userInfo.sub
-    });
+    const profile = await window.AuthService.loginWithGoogle();
+    setCurrentUser(profile);
+    closeModal('authModal');
+    SoundFX.playWin();
+    showToast(`เข้าสู่ระบบด้วย Google สำเร็จ! ยินดีต้อนรับคุณ ${profile.name} 🎉`, 'success');
   } catch (err) {
-    console.error("Error fetching Google user profile:", err);
-    showToast('ดึงข้อมูลโปรไฟล์จาก Google ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', 'error');
+    SoundFX.playTick();
+    showToast(translateFirebaseAuthError(err), 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
-}
-
-function processGoogleUser(profile) {
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const emailLower = profile.email.toLowerCase();
-  let user = users.find(u => u.email.toLowerCase() === emailLower);
-
-  if (!user) {
-    const nowStr = new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
-    user = {
-      id: `usr_g_${Date.now()}`,
-      name: profile.name || profile.email.split('@')[0],
-      studentId: emailLower.endsWith('@spu.ac.th') ? '67' + Math.floor(100000 + Math.random() * 900000) : 'SPU-G-' + Date.now().toString().slice(-4),
-      faculty: emailLower.endsWith('@spu.ac.th') ? 'คณะเทคโนโลยีสารสนเทศ (Google Account)' : 'บุคคลทั่วไป / ผู้มาเยือน',
-      phone: '-',
-      status: 'อนุมัติแล้ว',
-      applicationNotes: 'เข้าสู่ระบบด้วย Google Cloud Console OAuth 2.0',
-      email: profile.email,
-      password: '',
-      role: emailLower.includes('admin') ? 'admin' : 'student',
-      userType: emailLower.endsWith('@spu.ac.th') ? 'นักศึกษา' : 'บุคคลทั่วไป',
-      avatar: profile.avatar || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`,
-      badges: ["newbie"],
-      favorites: [],
-      checkInStreak: 0,
-      lastCheckInDate: null,
-      unlockedFrames: ["frame-none"],
-      equippedFrame: "frame-none",
-      customTitle: "นักชิมมือใหม่",
-      unlockedTitles: ["นักชิมมือใหม่"],
-      createdAt: nowStr
-    };
-    users.push(user);
-    Store.set(STORAGE_KEYS.USERS, users);
-  } else {
-    // Preserve existing user streak, check-in, and rewards! Only update avatar if needed
-    if (profile.avatar && (!user.avatar || user.avatar.includes('photo-1534528741775'))) {
-      user.avatar = profile.avatar;
-      Store.set(STORAGE_KEYS.USERS, users);
-    }
-  }
-
-  setCurrentUser(user);
-  closeModal('authModal');
-  SoundFX.playWin();
-  showToast(`เข้าสู่ระบบด้วย Google สำเร็จ! ยินดีต้อนรับคุณ ${user.name} 🎉`, 'success');
-}
-
-function openGoogleConfigModal() {
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  const input = document.getElementById('googleConfigClientIdInput');
-  if (input) input.value = settings.googleClientId || '';
-  openModal('googleConfigModal');
-}
-
-function saveGoogleConfigClientId() {
-  const input = document.getElementById('googleConfigClientIdInput');
-  if (!input) return;
-  const newClientId = input.value.trim();
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  settings.googleClientId = newClientId;
-  Store.set(STORAGE_KEYS.SETTINGS, settings);
-  initGoogleSignIn();
-  closeModal('googleConfigModal');
-  SoundFX.playWin();
-  showToast('บันทึก Google Cloud Console Web Client ID สำเร็จเรียบร้อย!', 'success');
-}
-
-function saveGoogleClientIdFromAdmin() {
-  if (!isAdmin()) return;
-  const input = document.getElementById('adminGoogleClientIdInput');
-  if (!input) return;
-  const newClientId = input.value.trim();
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  settings.googleClientId = newClientId;
-  Store.set(STORAGE_KEYS.SETTINGS, settings);
-  initGoogleSignIn();
-  SoundFX.playWin();
-  showToast('บันทึก Google OAuth 2.0 Web Client ID จากการตั้งค่าแอดมินเรียบร้อย!', 'success');
 }
 
 // Fallback stubs for backward compatibility
@@ -939,13 +895,17 @@ function mockGoogleLogin() {
   triggerGoogleSignIn();
 }
 
-function handleLogout() {
-  Store.set(STORAGE_KEYS.CURRENT_USER, null);
-  renderNavUser();
-  if (typeof renderDailyCheckIn === 'function') renderDailyCheckIn();
-  if (typeof renderLeaderboard === 'function') renderLeaderboard();
-  if (typeof renderAdminOnlyButtons === 'function') renderAdminOnlyButtons();
+async function handleLogout() {
+  try {
+    if (window.AuthService && window.AuthService.isConfigured()) {
+      await window.AuthService.logout();
+    }
+  } catch (err) {
+    console.warn('Logout notice:', err);
+  }
+  setCurrentUser(null);
   closeModal('profileModal');
+  closeModal('adminModal');
   showToast('ออกจากระบบเรียบร้อยแล้ว', 'info');
 }
 
@@ -998,7 +958,7 @@ function populateFilterDropdowns() {
 }
 
 function calculateRestaurantRating(restaurantId) {
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
+  const reviews = AppState.reviews;
   const restReviews = reviews.filter(r => r.restaurantId === restaurantId);
   if (restReviews.length === 0) return { avg: 0, count: 0 };
   const sum = restReviews.reduce((acc, r) => acc + Number(r.rating), 0);
@@ -1013,51 +973,43 @@ function filterRestaurants() {
   const price = document.getElementById('priceFilter')?.value || 'all';
   const sort = document.getElementById('sortBy')?.value || 'rating';
 
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
-  const currentUser = getCurrentUser();
+  const restaurants = AppState.restaurants;
 
   const filtered = restaurants.filter(r => {
-    // Search keyword
-    const matchSearch = !search || 
-      r.name.toLowerCase().includes(search) || 
-      r.description.toLowerCase().includes(search) || 
+    const matchSearch = !search ||
+      (r.name && r.name.toLowerCase().includes(search)) ||
+      (r.description && r.description.toLowerCase().includes(search)) ||
       (r.tags && r.tags.some(t => t.toLowerCase().includes(search))) ||
-      (r.menus && r.menus.some(m => m.name.toLowerCase().includes(search)));
+      (r.menus && r.menus.some(m => m.name && m.name.toLowerCase().includes(search)));
 
-    // Quick tags removed per user request: match all items
-    const matchTag = true;
-
-    // Location
     const matchLoc = location === 'all' || r.location === location;
-
-    // Category
     const matchCat = category === 'all' || r.category === category;
 
-    // Price
     let matchPrice = true;
-    if (price === 'under40') matchPrice = r.avgPrice < 40;
-    else if (price === '40-60') matchPrice = r.avgPrice >= 40 && r.avgPrice <= 60;
-    else if (price === '60-100') matchPrice = r.avgPrice > 60 && r.avgPrice <= 100;
-    else if (price === 'over100') matchPrice = r.avgPrice > 100;
+    const avgP = Number(r.avgPrice) || 0;
+    if (price === 'under40') matchPrice = avgP < 40;
+    else if (price === '40-60') matchPrice = avgP >= 40 && avgP <= 60;
+    else if (price === '60-100') matchPrice = avgP > 60 && avgP <= 100;
+    else if (price === 'over100') matchPrice = avgP > 100;
 
-    return matchSearch && matchTag && matchLoc && matchCat && matchPrice;
+    return matchSearch && matchLoc && matchCat && matchPrice;
   });
 
-  // Calculate dynamic ratings and sort
+  // Calculate live ratings from Firestore reviews
   filtered.forEach(r => {
     const stats = calculateRestaurantRating(r.id);
-    r.computedRating = stats.count > 0 ? stats.avg : (r.rating || 0);
-    r.computedCount = stats.count > 0 ? stats.count : (r.reviewCount || 0);
+    r.computedRating = stats.count > 0 ? stats.avg : 0;
+    r.computedCount = stats.count;
   });
 
   if (sort === 'rating') {
-    filtered.sort((a, b) => b.computedRating - a.computedRating);
+    filtered.sort((a, b) => (b.computedRating - a.computedRating) || (b.computedCount - a.computedCount));
   } else if (sort === 'reviews') {
     filtered.sort((a, b) => b.computedCount - a.computedCount);
   } else if (sort === 'priceAsc') {
-    filtered.sort((a, b) => a.avgPrice - b.avgPrice);
+    filtered.sort((a, b) => (Number(a.avgPrice) || 0) - (Number(b.avgPrice) || 0));
   } else if (sort === 'priceDesc') {
-    filtered.sort((a, b) => b.avgPrice - a.avgPrice);
+    filtered.sort((a, b) => (Number(b.avgPrice) || 0) - (Number(a.avgPrice) || 0));
   }
 
   renderRestaurantGrid(filtered);
@@ -1075,20 +1027,53 @@ function applyQuickFilter(tag, element) {
   filterRestaurants();
 }
 
+function selectDishCategory(catVal, btnEl) {
+  const catSelect = document.getElementById('categoryFilter');
+  if (catSelect) {
+    catSelect.value = catVal || 'all';
+  }
+  document.querySelectorAll('.dish-cat-card').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  SoundFX.playTick();
+  filterRestaurants();
+}
+
+function quickSelectCanteenLocation(locVal, btnEl) {
+  const locSelect = document.getElementById('locationFilter');
+  if (locSelect) {
+    locSelect.value = locVal || 'all';
+  }
+  document.querySelectorAll('.canteen-pill').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  SoundFX.playTick();
+  filterRestaurants();
+}
+
 function renderRestaurantGrid(list) {
   const grid = document.getElementById('restaurantGrid');
   if (!grid) return;
 
-  const allRestaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
+  const allRestaurants = AppState.restaurants;
+
+  if (window.FirestoreService?.isConfigured() && !AppState.restaurantsLoaded && allRestaurants.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 3rem 1.5rem; text-align: center; background: var(--bg-surface); grid-column: 1 / -1;">
+        <div class="empty-icon" style="font-size: 3rem; margin-bottom: 0.75rem;">🔥</div>
+        <div class="empty-title" style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.35rem;">กำลังโหลดข้อมูลร้านอาหารจาก Cloud Firestore...</div>
+        <div class="empty-desc" style="font-size: 0.9rem; color: var(--text-muted);">กรุณารอสักครู่</div>
+      </div>
+    `;
+    return;
+  }
 
   if (allRestaurants.length === 0) {
     if (isAdmin()) {
       grid.innerHTML = `
-        <div class="empty-state" style="border: 2px dashed var(--border-color); border-radius: var(--radius-lg); padding: 3.5rem 1.5rem; text-align: center; background: var(--bg-card); grid-column: 1 / -1; box-shadow: var(--shadow-sm);">
+        <div class="empty-state" style="border: 2px dashed var(--border-color); border-radius: var(--radius-lg); padding: 3.5rem 1.5rem; text-align: center; background: var(--bg-surface); grid-column: 1 / -1; box-shadow: var(--shadow-sm);">
           <div class="empty-icon" style="font-size: 3.8rem; margin-bottom: 0.85rem;">🍽️</div>
-          <div class="empty-title" style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-color);">ยังไม่มีร้านอาหารในระบบ (กล่องว่างพร้อมให้ใส่ข้อมูล)</div>
+          <div class="empty-title" style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-main);">ยังไม่มีร้านอาหารในระบบ (กล่องว่างพร้อมให้ใส่ข้อมูล)</div>
           <div class="empty-desc" style="font-size: 0.95rem; color: var(--text-muted); max-width: 540px; margin: 0 auto 1.5rem auto; line-height: 1.6;">
-            ข้อมูลร้านอาหารตัวอย่างถูกล้างออกเรียบร้อยแล้ว คุณสามารถเริ่มเพิ่มร้านอาหารจริงใน ม.ศรีปทุม (SPU) เช่น โรงเย็น (อาคาร 10) หรือโรงร้อน (หลังอาคาร 5) ได้ทันที!
+            ฐานข้อมูล Cloud Firestore พร้อมใช้งานแล้ว คุณสามารถเริ่มเพิ่มร้านอาหารจริงใน ม.ศรีปทุม (SPU) เช่น โรงเย็น (อาคาร 10) หรือโรงร้อน (หลังอาคาร 5) ได้ทันที!
           </div>
           <button type="button" class="btn btn-primary btn-lg" onclick="openAddRestaurantModal()">
             ➕ เพิ่มร้านอาหารแรกของคุณเลย!
@@ -1097,9 +1082,9 @@ function renderRestaurantGrid(list) {
       `;
     } else {
       grid.innerHTML = `
-        <div class="empty-state" style="border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 3.5rem 1.5rem; text-align: center; background: var(--bg-card); grid-column: 1 / -1; box-shadow: var(--shadow-sm);">
+        <div class="empty-state" style="border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 3.5rem 1.5rem; text-align: center; background: var(--bg-surface); grid-column: 1 / -1; box-shadow: var(--shadow-sm);">
           <div class="empty-icon" style="font-size: 3.8rem; margin-bottom: 0.85rem;">🍽️</div>
-          <div class="empty-title" style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-color);">ตอนนี้ยังไม่มีร้านแนะนำ ลองมาใหม่ในรอบหน้านะครับ</div>
+          <div class="empty-title" style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-main);">ตอนนี้ยังไม่มีร้านแนะนำ ลองมาใหม่ในรอบหน้านะครับ</div>
           <div class="empty-desc" style="font-size: 0.95rem; color: var(--text-muted); max-width: 480px; margin: 0 auto; line-height: 1.6;">
             ผู้ดูแลระบบกำลังเตรียมข้อมูลร้านอาหารอร่อยๆ ในโรงอาหาร SPU ไว้ให้คุณ กรุณากลับมาติดตามชมในรอบถัดไปนะครับ 😋
           </div>
@@ -1114,7 +1099,7 @@ function renderRestaurantGrid(list) {
       <div class="empty-state" style="grid-column: 1 / -1;">
         <div class="empty-icon">🔍</div>
         <div class="empty-title">ไม่พบร้านอาหารที่ตรงกับเงื่อนไขการค้นหา</div>
-        <div class="empty-desc">ลองปรับตัวกรอง หรือค้นหาด้วยชื่อเมนูอื่น เช่น กะเพรา, ชาไทย, สเต็ก</div>
+        <div class="empty-desc">ลองปรับตัวกรอง หรือค้นหาด้วยชื่อเมนูอื่น เช่น กะเพรา, ก๋วยเตี๋ยวเรือ, ชาไทย</div>
         <button type="button" class="btn btn-outline" onclick="resetFilters()">ล้างตัวกรองทั้งหมด</button>
       </div>
     `;
@@ -1127,37 +1112,51 @@ function renderRestaurantGrid(list) {
   grid.innerHTML = list.map(rst => {
     const isFav = userFavs.includes(rst.id);
     const tagsHtml = (rst.tags || []).slice(0, 3).map(t => `<span class="card-tag">#${t}</span>`).join('');
+    const recMenus = (rst.menus || []).slice(0, 2);
+    const menusPreviewHtml = recMenus.length > 0
+      ? `<div class="card-dishes-preview">
+           <div class="card-dishes-label">🍽️ เมนูแนะนำประจำร้าน:</div>
+           <div class="card-dishes-list">
+             ${recMenus.map(m => `<span class="card-dish-pill">🍳 ${m.name} <strong>${m.price}฿</strong></span>`).join('')}
+           </div>
+         </div>`
+      : '';
 
     return `
       <div class="restaurant-card" data-id="${rst.id}">
-        <div class="card-img-wrapper">
+        <div class="card-img-wrapper" onclick="openRestaurantDetail('${rst.id}')" style="cursor: pointer;">
           <img src="${rst.image}" alt="${rst.name}" class="card-img" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600'">
           <div class="card-badge-rating">
-            ⭐ ${rst.computedRating.toFixed(1)} <span style="font-size: 0.7rem; opacity: 0.8;">(${rst.computedCount})</span>
+            ★ ${rst.computedRating.toFixed(1)} <span style="font-size: 0.75rem; opacity: 0.9;">(${rst.computedCount} รีวิว)</span>
           </div>
           <button type="button" class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${rst.id}', event)" title="${isFav ? 'นำออกจากร้านโปรด' : 'บันทึกเป็นร้านโปรด'}">
             ${isFav ? '❤️' : '🤍'}
           </button>
+          <div class="card-img-bottom-bar">
+            <span class="card-cat-chip">🍛 ${rst.category || 'จานเด็ด SPU'}</span>
+            ${rst.openHours ? `<span class="card-hours-chip">⏰ ${rst.openHours}</span>` : ''}
+          </div>
         </div>
 
         <div class="card-body">
           <div class="card-location">📍 ${rst.location}</div>
-          <h3 class="card-title">${rst.name}</h3>
+          <h3 class="card-title" onclick="openRestaurantDetail('${rst.id}')" style="cursor: pointer;">${rst.name}</h3>
           <p class="card-desc">${rst.description}</p>
+          ${menusPreviewHtml}
           <div class="card-tags">${tagsHtml}</div>
 
           <div class="card-footer">
             <div class="card-price">
-              <span>ช่วงราคา:</span> ${rst.priceRange}
+              <span>💰 ราคาต่อจาน:</span> ${rst.priceRange}
             </div>
             <div style="display: flex; gap: 0.4rem; align-items: center;">
               ${isAdmin() ? `
                 <button type="button" class="btn btn-outline btn-sm" onclick="openEditRestaurantModal('${rst.id}')" title="แก้ไขข้อมูลร้านอาหาร">
-                  ✏️ แก้ไข
+                  แก้ไข
                 </button>
               ` : ''}
               <button type="button" class="btn btn-primary btn-sm" onclick="openRestaurantDetail('${rst.id}')">
-                ดูเมนู & รีวิว 💬
+                🍽️ ดูเมนู & รีวิว
               </button>
             </div>
           </div>
@@ -1173,36 +1172,44 @@ function resetFilters() {
   document.getElementById('categoryFilter').value = 'all';
   document.getElementById('priceFilter').value = 'all';
   currentFilterTag = 'all';
-  document.querySelectorAll('.quick-filter-chip').forEach((c, i) => {
-    if (i === 0) c.classList.add('active');
-    else c.classList.remove('active');
+  document.querySelectorAll('.quick-filter-chip, .dish-cat-card, .canteen-pill').forEach((c) => {
+    c.classList.remove('active');
   });
+  const firstDishCard = document.querySelector('.dish-cat-card[data-cat="all"]');
+  if (firstDishCard) firstDishCard.classList.add('active');
+  const firstCanteenPill = document.querySelector('.canteen-pill');
+  if (firstCanteenPill) firstCanteenPill.classList.add('active');
   filterRestaurants();
 }
 
-function toggleFavorite(restaurantId, event) {
+async function toggleFavorite(restaurantId, event) {
   if (event) event.stopPropagation();
   if (!requireAuth("บันทึกร้านอาหารโปรด")) return;
 
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
   const currentUser = getCurrentUser();
-  const user = users.find(u => u.id === currentUser.id);
+  if (!currentUser) return;
+  const favs = [...(currentUser.favorites || [])];
 
-  if (!user) return;
-  if (!user.favorites) user.favorites = [];
-
-  const idx = user.favorites.indexOf(restaurantId);
+  const idx = favs.indexOf(restaurantId);
   if (idx > -1) {
-    user.favorites.splice(idx, 1);
+    favs.splice(idx, 1);
     showToast('นำออกจากร้านโปรดแล้ว', 'info');
   } else {
-    user.favorites.push(restaurantId);
+    favs.push(restaurantId);
     showToast('บันทึกลงในร้านโปรดเรียบร้อย ❤️', 'success');
   }
 
-  Store.set(STORAGE_KEYS.USERS, users);
-  setCurrentUser(user);
+  currentUser.favorites = favs;
+  setCurrentUser(currentUser);
   filterRestaurants();
+
+  if (window.AuthService?.isConfigured()) {
+    try {
+      await window.AuthService.updateOwnProfile(currentUser.uid || currentUser.id, { favorites: favs });
+    } catch (err) {
+      console.warn('Favorite Firestore update error:', err);
+    }
+  }
 }
 
 // ============================================================================
@@ -1282,7 +1289,7 @@ function switchDetailMainPhoto(index, btn) {
 
 function openRestaurantDetail(restaurantId) {
   currentDetailRestaurantId = restaurantId;
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
+  const restaurants = AppState.restaurants;
   const rst = restaurants.find(r => r.id === restaurantId);
   if (!rst) return;
 
@@ -1293,9 +1300,14 @@ function openRestaurantDetail(restaurantId) {
   if (modalTitle) modalTitle.textContent = rst.name;
 
   const stats = calculateRestaurantRating(rst.id);
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS).filter(r => r.restaurantId === rst.id);
+  const reviews = AppState.reviews.filter(r => r.restaurantId === rst.id);
   const currentUser = getCurrentUser();
-  const userExistingReview = currentUser ? reviews.find(r => r.userId === currentUser.id) : null;
+  const currentUid = currentUser ? (currentUser.uid || currentUser.id) : null;
+  const userExistingReview = currentUid ? reviews.find(r => r.userId === currentUid) : null;
+
+  // Initialize review rating state to user existing review rating or default 5
+  currentReviewRating = userExistingReview ? (userExistingReview.rating || 5) : 5;
+  reviewFormUploadedImage = '';
 
   // Setup Gallery Images (up to 5 images)
   const galleryImages = (rst.images && rst.images.length > 0)
@@ -1340,13 +1352,13 @@ function openRestaurantDetail(restaurantId) {
 
     <!-- Inner Tab Navigation -->
     <div class="tab-nav">
-      <button type="button" class="tab-btn active" onclick="switchDetailTab('detailMenuTab', this)">📋 รายการเมนูแนะนำ (${rst.menus ? rst.menus.length : 0})</button>
+      <button type="button" class="tab-btn active" onclick="switchDetailTab('detailMenuTab', this)">📋 เมนูในร้าน (${(rst.menuSections ? rst.menuSections.reduce((sum, s) => sum + (s.items?.length || 0), 0) : 0) || (rst.menus ? rst.menus.length : 0)})</button>
       <button type="button" class="tab-btn" onclick="switchDetailTab('detailReviewTab', this)">⭐ รีวิวจากเพื่อน SPU (${stats.count})</button>
     </div>
 
     <!-- TAB 1: Menu Items -->
     <div class="tab-pane active" id="detailMenuTab">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.15rem; flex-wrap: wrap; gap: 0.5rem;">
         <div style="color: var(--text-muted); font-size: 0.9rem; max-width: 650px;">
           ${rst.description}
         </div>
@@ -1361,21 +1373,104 @@ function openRestaurantDetail(restaurantId) {
           </div>
         ` : ''}
       </div>
-      <div class="menu-items-grid">
-        ${(rst.menus || []).map((m, mIdx) => `
-          <div class="menu-card">
-            <img src="${m.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200'}" class="menu-thumb" alt="${m.name}" style="cursor: pointer;" onclick="openPhotoLightboxWithSrc(this.src, 'เมนู ${m.name}')" title="🔍 คลิกดูรูปเมนู" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200'">
-            <div class="menu-info">
-              ${m.isRecommended ? '<span class="menu-badge">⭐ เมนูแนะนำ</span>' : ''}
-              <div class="menu-name">${m.name}</div>
-              <div class="menu-price">${m.price} บาท</div>
+
+      ${(() => {
+        const allMenus = Array.isArray(rst.menus) ? rst.menus : [];
+        const recommendedMenus = allMenus
+          .map((m, idx) => ({ m, idx }))
+          .filter(x => x.m && x.m.isRecommended === true);
+        const regularMenus = allMenus
+          .map((m, idx) => ({ m, idx }))
+          .filter(x => x.m && x.m.isRecommended !== true);
+        const menuSections = Array.isArray(rst.menuSections) ? rst.menuSections : [];
+        const totalCatalogItems = menuSections.reduce((sum, s) => sum + (Array.isArray(s.items) ? s.items.length : 0), 0);
+
+        let html = '';
+
+        // 1. Recommended Menus Section (shown ONLY when the shop actually has recommended menus)
+        if (recommendedMenus.length > 0) {
+          html += `
+            <div class="detail-menu-section-head">
+              <span>⭐ เมนูแนะนำประจำร้าน</span>
+              <span class="detail-menu-count-pill">${recommendedMenus.length} เมนู</span>
             </div>
-            ${isAdmin() ? `
-              <button type="button" style="color: #ef4444; font-size: 1rem; padding: 0.25rem 0.5rem;" onclick="adminDeleteMenu('${rst.id}', ${mIdx})" title="ลบเมนูนี้">✕</button>
-            ` : ''}
+            <div class="menu-items-grid" style="margin-bottom: 1.5rem;">
+              ${recommendedMenus.map(({ m, idx }) => `
+                <div class="menu-card">
+                  <img src="${m.image || rst.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200'}" class="menu-thumb" alt="${escapeHtml(m.name)}" style="cursor: pointer;" onclick="openPhotoLightboxWithSrc(this.src, 'เมนู ${escapeHtml(m.name)}')" title="🔍 คลิกดูรูปเมนู" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200'">
+                  <div class="menu-info">
+                    <span class="menu-badge">⭐ เมนูแนะนำ</span>
+                    <div class="menu-name">${escapeHtml(m.name)}</div>
+                    <div class="menu-price">${m.price} บาท</div>
+                  </div>
+                  ${isAdmin() ? `
+                    <button type="button" style="color: #ef4444; font-size: 1rem; padding: 0.25rem 0.5rem;" onclick="adminDeleteMenu('${rst.id}', ${idx})" title="ลบเมนูนี้">✕</button>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+
+        // 2. Store Menu List Section (รายการเมนูในร้าน — แยกหัวข้อชัดเจน)
+        html += `
+          <div class="detail-menu-section-head">
+            <span>📋 รายการเมนูในร้าน</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span class="detail-menu-count-pill">${totalCatalogItems > 0 ? `${totalCatalogItems} รายการ` : `${regularMenus.length} รายการ`}</span>
+              ${isAdmin() ? `
+                <button type="button" class="btn btn-outline btn-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" onclick="closeModal('restaurantDetailModal'); openEditRestaurantModal('${rst.id}', 'menuSections')">
+                  ✏️ แก้ไขรายการเมนูในร้าน
+                </button>
+              ` : ''}
+            </div>
           </div>
-        `).join('')}
-      </div>
+        `;
+
+        if (menuSections.length > 0) {
+          html += `
+            <div class="store-menu-sections-grid">
+              ${menuSections.map(sec => `
+                <div class="store-menu-group-card">
+                  <div class="store-menu-group-title">
+                    <span>${escapeHtml(sec.title || '')}</span>
+                    ${sec.subtitle ? `<span class="store-menu-group-sub">${escapeHtml(sec.subtitle)}</span>` : ''}
+                  </div>
+                  <div>
+                    ${(sec.items || []).map(item => `
+                      <div class="store-menu-row">
+                        <span class="store-menu-row-name">${escapeHtml(item.name || '')}</span>
+                        <span class="store-menu-row-price">${escapeHtml(item.price || '')}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        } else if (regularMenus.length > 0) {
+          html += `
+            <div class="menu-items-grid">
+              ${regularMenus.map(({ m, idx }) => `
+                <div class="menu-card">
+                  <img src="${m.image || rst.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200'}" class="menu-thumb" alt="${escapeHtml(m.name)}" style="cursor: pointer;" onclick="openPhotoLightboxWithSrc(this.src, 'เมนู ${escapeHtml(m.name)}')" title="🔍 คลิกดูรูปเมนู" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200'">
+                  <div class="menu-info">
+                    <div class="menu-name">${escapeHtml(m.name)}</div>
+                    <div class="menu-price">${m.price} บาท</div>
+                  </div>
+                  ${isAdmin() ? `
+                    <button type="button" style="color: #ef4444; font-size: 1rem; padding: 0.25rem 0.5rem;" onclick="adminDeleteMenu('${rst.id}', ${idx})" title="ลบเมนูนี้">✕</button>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          `;
+        } else if (recommendedMenus.length === 0) {
+          html += '<div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">ยังไม่มีรายการเมนูในขณะนี้</div>';
+        }
+
+        return html;
+      })()}
     </div>
 
     <!-- TAB 2: Reviews & Write Review -->
@@ -1388,7 +1483,7 @@ function openRestaurantDetail(restaurantId) {
             ${getStarSymbols(Math.round(stats.avg || 0))}
           </div>
           <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
-            จากทั้งหมด ${stats.count} รีวิว
+            ${stats.count > 0 ? `จากทั้งหมด ${stats.count} รีวิว` : 'ยังไม่มีรีวิว'}
           </div>
         </div>
         <div style="flex-grow: 1; border-left: 1px solid var(--border-color); padding-left: 1.5rem; font-size: 0.875rem;">
@@ -1423,8 +1518,18 @@ function openRestaurantDetail(restaurantId) {
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="reviewImageUrlInput">แนบลิงก์รูปภาพอาหาร (ถ้ามี):</label>
-          <input type="url" id="reviewImageUrlInput" class="form-control" placeholder="https://images.unsplash.com/..." value="${userExistingReview?.image || ''}">
+          <label class="form-label" for="reviewImageUrlInput">แนบรูปภาพอาหาร (อัปโหลดจากเครื่อง หรือวางลิงก์รูป):</label>
+          <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap;">
+            <input type="file" id="reviewImageFileInput" accept="image/*" style="display: none;" onchange="handleReviewImageUpload(event)">
+            <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('reviewImageFileInput').click()">
+              📷 เลือกรูปจากเครื่อง
+            </button>
+            <span id="reviewImageFileName" style="font-size: 0.8rem; color: var(--text-muted);"></span>
+          </div>
+          <input type="url" id="reviewImageUrlInput" class="form-control" placeholder="หรือวางลิงก์รูปภาพ https://..." value="${userExistingReview?.image || ''}" oninput="handleReviewImageUrlInput(this.value)">
+          <div id="reviewImagePreviewWrap" style="margin-top: 0.5rem; display: ${userExistingReview?.image ? 'block' : 'none'};">
+            <img id="reviewImagePreview" src="${userExistingReview?.image || ''}" alt="ตัวอย่างรูปอาหาร" style="max-height: 120px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-color); object-fit: cover;">
+          </div>
         </div>
 
         <button type="button" class="btn btn-primary" onclick="submitReview('${rst.id}')">
@@ -1437,15 +1542,16 @@ function openRestaurantDetail(restaurantId) {
       <div class="reviews-list">
         ${reviews.length === 0 ? '<div style="color: var(--text-muted); text-align: center; padding: 2rem;">ยังไม่มีรีวิวสำหรับร้านนี้ เป็นคนแรกที่รีวิวเลย!</div>' : ''}
         ${reviews.map(rev => {
-          const isMyReview = currentUser && rev.userId === currentUser.id;
+          const isMyReview = currentUid && rev.userId === currentUid;
+          const dateLabel = rev.date || formatFirebaseDate(rev.createdAt);
           return `
             <div class="review-item">
               <div class="review-header">
                 <div class="reviewer-meta">
-                  <img src="${rev.userAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}" class="reviewer-avatar" alt="${rev.userName}">
+                  ${renderFramedAvatar(rev.userAvatar, rev.userFrame || 'frame-none', 42, 'reviewer-avatar', rev.userName)}
                   <div>
                     <div class="reviewer-name">${rev.userName} ${isMyReview ? '<span style="font-size: 0.7rem; background: var(--primary-light); color: var(--primary); padding: 0.1rem 0.4rem; border-radius: 4px;">คุณ</span>' : ''}</div>
-                    <div class="review-date">${rev.date}</div>
+                    <div class="review-date">${dateLabel}</div>
                   </div>
                 </div>
                 <div class="review-stars">${getStarSymbols(rev.rating)}</div>
@@ -1499,17 +1605,25 @@ function openAddMenuPrompt(restaurantId) {
   openEditRestaurantModal(restaurantId);
 }
 
-function adminDeleteMenu(restaurantId, menuIndex) {
+async function adminDeleteMenu(restaurantId, menuIndex) {
   if (!isAdmin()) return;
   if (!confirm("คุณต้องการลบเมนูนี้ออกจากร้านใช่หรือไม่?")) return;
 
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
-  const rst = restaurants.find(r => r.id === restaurantId);
-  if (rst && rst.menus && rst.menus[menuIndex]) {
-    const deleted = rst.menus.splice(menuIndex, 1);
-    Store.set(STORAGE_KEYS.RESTAURANTS, restaurants);
-    showToast(`ลบเมนู "${deleted[0].name}" เรียบร้อยแล้ว`, "info");
+  const rst = AppState.restaurants.find(r => r.id === restaurantId);
+  if (!rst || !rst.menus || !rst.menus[menuIndex]) return;
+
+  const deletedName = rst.menus[menuIndex].name;
+  const updatedMenus = rst.menus.filter((_, idx) => idx !== menuIndex);
+
+  try {
+    await window.FirestoreService.updateRestaurant(restaurantId, { menus: updatedMenus });
+    rst.menus = updatedMenus;
+    showToast(`ลบเมนู "${deletedName}" เรียบร้อยแล้ว`, "info");
     openRestaurantDetail(restaurantId);
+    renderAdminRestaurantsTable();
+  } catch (err) {
+    console.error('Error deleting menu:', err);
+    showToast('ลบเมนูไม่สำเร็จ: ' + (err?.message || 'ไม่มีสิทธิ์หรือเชื่อมต่อ Firebase ไม่ได้'), 'error');
   }
 }
 
@@ -1531,11 +1645,64 @@ function getStarSymbols(rating) {
   return stars;
 }
 
-function submitReview(restaurantId) {
+let reviewFormUploadedImage = '';
+
+async function handleReviewImageUpload(event) {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showToast('กรุณาเลือกไฟล์รูปภาพเท่านั้น (PNG, JPG, WebP, GIF)', 'error');
+    return;
+  }
+  try {
+    const compressed = await compressImageFile(file, 800, 600, 0.78);
+    if (compressed) {
+      reviewFormUploadedImage = compressed;
+      const fileNameEl = document.getElementById('reviewImageFileName');
+      if (fileNameEl) fileNameEl.textContent = `✅ แนบรูปแล้ว (${file.name})`;
+      const previewImg = document.getElementById('reviewImagePreview');
+      const previewWrap = document.getElementById('reviewImagePreviewWrap');
+      if (previewImg && previewWrap) {
+        previewImg.src = compressed;
+        previewWrap.style.display = 'block';
+      }
+      showToast('แนบรูปภาพอาหารเรียบร้อยแล้ว 📷', 'success');
+    }
+  } catch (err) {
+    console.error('Review image upload error:', err);
+    showToast('อ่านไฟล์รูปภาพไม่สำเร็จ', 'error');
+  } finally {
+    if (event.target) event.target.value = '';
+  }
+}
+
+function handleReviewImageUrlInput(val) {
+  const trimmed = (val || '').trim();
+  const previewImg = document.getElementById('reviewImagePreview');
+  const previewWrap = document.getElementById('reviewImagePreviewWrap');
+  if (trimmed) {
+    reviewFormUploadedImage = '';
+    const fileNameEl = document.getElementById('reviewImageFileName');
+    if (fileNameEl) fileNameEl.textContent = '';
+    if (previewImg && previewWrap) {
+      previewImg.src = trimmed;
+      previewWrap.style.display = 'block';
+    }
+  } else if (!reviewFormUploadedImage) {
+    if (previewWrap) previewWrap.style.display = 'none';
+  }
+}
+
+async function submitReview(restaurantId) {
   if (!requireAuth("เขียนรีวิวร้านอาหาร")) return;
+  if (!window.FirestoreService?.isConfigured()) {
+    showToast('⚠️ กรุณาเชื่อมต่อ firebaseConfig ใน js/firebase-config.js ก่อนบันทึกรีวิว', 'warning');
+    return;
+  }
 
   const comment = document.getElementById('reviewCommentInput')?.value.trim();
   const imageUrl = document.getElementById('reviewImageUrlInput')?.value.trim();
+  const finalImage = reviewFormUploadedImage || imageUrl || '';
 
   if (!comment || comment.length < 10) {
     showToast('กรุณาเขียนรีวิวอย่างน้อย 10 ตัวอักษร เพื่อให้ข้อมูลเป็นประโยชน์แก่เพื่อนๆ', 'error');
@@ -1543,146 +1710,180 @@ function submitReview(restaurantId) {
   }
 
   const currentUser = getCurrentUser();
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-  const existingIdx = reviews.findIndex(r => r.restaurantId === restaurantId && r.userId === currentUser.id);
+  const uid = currentUser.uid || currentUser.id;
+  const existing = AppState.reviews.find(r => r.restaurantId === restaurantId && r.userId === uid);
 
-  const nowStr = new Date().toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
-
-  if (existingIdx > -1) {
-    // Update existing review
-    reviews[existingIdx].rating = currentReviewRating;
-    reviews[existingIdx].comment = comment;
-    reviews[existingIdx].image = imageUrl || null;
-    reviews[existingIdx].date = nowStr;
-    showToast('แก้ไขรีวิวสำเร็จแล้ว!', 'success');
-  } else {
-    // Create new review
-    const newReview = {
-      id: `rev_${Date.now()}`,
+  try {
+    await window.FirestoreService.saveReview({
       restaurantId,
-      userId: currentUser.id,
+      userId: uid,
       userName: currentUser.name,
-      userAvatar: currentUser.avatar,
+      userAvatar: currentUser.avatar || '',
+      userFrame: currentUser.equippedFrame || 'frame-none',
+      userTitle: currentUser.customTitle || 'นักชิมมือใหม่',
       rating: currentReviewRating,
       comment,
-      date: nowStr,
-      helpfulCount: 0,
-      reported: false,
-      image: imageUrl || null
-    };
-    reviews.unshift(newReview);
+      image: finalImage
+    });
 
-    // Award badge for writing reviews
-    checkAndAwardBadges(currentUser.id);
-    SoundFX.playWin();
-    showToast('โพสต์รีวิวสำเร็จ! ขอบคุณที่ช่วยเพื่อนๆ เลือกร้านอร่อย 🎉', 'success');
+    if (existing) {
+      showToast('แก้ไขรีวิวสำเร็จแล้ว!', 'success');
+    } else {
+      await checkAndAwardBadges(uid, 1);
+      SoundFX.playWin();
+      showToast('โพสต์รีวิวสำเร็จ! ขอบคุณที่ช่วยเพื่อนๆ เลือกร้านอร่อย 🎉', 'success');
+    }
+
+    setTimeout(() => {
+      if (currentDetailRestaurantId === restaurantId) openRestaurantDetail(restaurantId);
+      filterRestaurants();
+      renderLeaderboard();
+    }, 150);
+  } catch (err) {
+    console.error('Submit review error:', err);
+    showToast('บันทึกรีวิวไม่สำเร็จ: ' + (err?.message || 'กรุณาตรวจสอบ Security Rules'), 'error');
   }
-
-  Store.set(STORAGE_KEYS.REVIEWS, reviews);
-  openRestaurantDetail(restaurantId);
-  filterRestaurants();
-  renderLeaderboard();
 }
 
-function deleteMyReview(reviewId) {
+async function deleteMyReview(reviewId) {
   if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการลบรีวิวนี้?')) return;
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-  const updated = reviews.filter(r => r.id !== reviewId);
-  Store.set(STORAGE_KEYS.REVIEWS, updated);
-  showToast('ลบรีวิวเรียบร้อยแล้ว', 'info');
-  if (currentDetailRestaurantId) {
-    openRestaurantDetail(currentDetailRestaurantId);
+  try {
+    await window.FirestoreService.deleteReview(reviewId);
+    AppState.reviews = AppState.reviews.filter(r => r.id !== reviewId);
+    showToast('ลบรีวิวเรียบร้อยแล้ว', 'info');
+    if (currentDetailRestaurantId) {
+      openRestaurantDetail(currentDetailRestaurantId);
+    }
+    filterRestaurants();
+    renderLeaderboard();
+  } catch (err) {
+    console.error('Delete review error:', err);
+    showToast('ลบรีวิวไม่สำเร็จ: ' + (err?.message || ''), 'error');
   }
-  filterRestaurants();
 }
 
-function voteHelpful(reviewId) {
+async function voteHelpful(reviewId) {
   if (!requireAuth("โหวตรีวิวมีประโยชน์")) return;
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-  const rev = reviews.find(r => r.id === reviewId);
+  const rev = AppState.reviews.find(r => r.id === reviewId);
   if (!rev) return;
 
-  rev.helpfulCount = (rev.helpfulCount || 0) + 1;
-  Store.set(STORAGE_KEYS.REVIEWS, reviews);
-
-  SoundFX.playMatch();
-  showToast('ขอบคุณสำหรับคะแนนโหวต! 👍', 'success');
-  if (currentDetailRestaurantId) {
-    openRestaurantDetail(currentDetailRestaurantId);
+  const currentUser = getCurrentUser();
+  const uid = currentUser.uid || currentUser.id;
+  try {
+    await window.FirestoreService.toggleHelpfulReview(reviewId, uid, rev.helpfulBy || []);
+    SoundFX.playMatch();
+    showToast('บันทึกคะแนนโหวตรีวิวแล้ว 👍', 'success');
+    setTimeout(() => {
+      if (currentDetailRestaurantId) openRestaurantDetail(currentDetailRestaurantId);
+    }, 150);
+  } catch (err) {
+    console.error('Vote helpful error:', err);
+    showToast('โหวตรีวิวไม่สำเร็จ', 'error');
   }
 }
 
-function reportReview(reviewId) {
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-  const rev = reviews.find(r => r.id === reviewId);
-  if (!rev) return;
-
-  rev.reported = true;
-  Store.set(STORAGE_KEYS.REVIEWS, reviews);
-  showToast('รายงานรีวิวไปยังทีมแอดมินเรียบร้อยแล้ว ขอบคุณที่ช่วยดูแลระบบ', 'info');
+async function reportReview(reviewId) {
+  if (!requireAuth("รายงานรีวิว")) return;
+  try {
+    await window.FirestoreService.reportReview(reviewId);
+    showToast('รายงานรีวิวไปยังทีมแอดมินเรียบร้อยแล้ว ขอบคุณที่ช่วยดูแลระบบ', 'info');
+  } catch (err) {
+    console.error('Report review error:', err);
+    showToast('ส่งรายงานไม่สำเร็จ', 'error');
+  }
 }
 
-function adminDeleteReview(reviewId, restaurantId) {
+async function adminDeleteReview(reviewId, restaurantId) {
   if (!isAdmin()) {
     showToast('เฉพาะแอดมินเท่านั้นที่มีสิทธิประหารคอมเมนต์', 'error');
     return;
   }
   if (!confirm('⚠️ แอดมินยืนยันที่จะ "ประหารคอมเมนต์" (ลบรีวิวนี้ออกจากระบบถาวร)?')) return;
 
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-  const updated = reviews.filter(r => r.id !== reviewId);
-  Store.set(STORAGE_KEYS.REVIEWS, updated);
-  showToast('ประหารคอมเมนต์เรียบร้อยแล้ว (ลบสำเร็จ)', 'success');
+  try {
+    await window.FirestoreService.deleteReview(reviewId);
+    AppState.reviews = AppState.reviews.filter(r => r.id !== reviewId);
+    showToast('ประหารคอมเมนต์เรียบร้อยแล้ว (ลบสำเร็จ)', 'success');
 
-  if (currentDetailRestaurantId) {
-    openRestaurantDetail(currentDetailRestaurantId);
+    if (currentDetailRestaurantId) {
+      openRestaurantDetail(currentDetailRestaurantId);
+    }
+    renderAdminReviews();
+    filterRestaurants();
+    renderLeaderboard();
+  } catch (err) {
+    console.error('Admin delete review error:', err);
+    showToast('ลบรีวิวไม่สำเร็จ: ' + (err?.message || ''), 'error');
   }
-  renderAdminReviews();
-  filterRestaurants();
 }
 
 // ============================================================================
 // 9. Badges & Leaderboard Engine (based on streaks & reviews, no points)
 // ============================================================================
 
-function checkAndAwardBadges(userId) {
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const user = users.find(u => u.id === userId);
+async function checkAndAwardBadges(userId, extraReviewCount = 0) {
+  const currentUser = getCurrentUser();
+  const user = (currentUser && (currentUser.uid === userId || currentUser.id === userId))
+    ? currentUser
+    : AppState.users.find(u => u.id === userId || u.uid === userId);
   if (!user) return;
 
-  if (!user.badges) user.badges = ["newbie"];
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-  const userReviewCount = reviews.filter(r => r.userId === userId).length;
+  const nextBadges = [...(user.badges || ["newbie"])];
+  const nextFrames = [...(user.unlockedFrames || ["frame-none"])];
+  const userReviewCount = AppState.reviews.filter(r => r.userId === userId).length + extraReviewCount;
   const userStreak = user.checkInStreak || 0;
 
-  let newBadgeUnlocked = false;
+  let changed = false;
 
   BADGES_LIST.forEach(b => {
-    if (user.badges.includes(b.id)) return;
+    if (nextBadges.includes(b.id)) return;
     let earned = false;
     if (b.reqType === 'register') earned = true;
     else if (b.reqType === 'streak' && userStreak >= (b.minStreak || 0)) earned = true;
     else if (b.reqType === 'reviews' && userReviewCount >= (b.minReviews || 0)) earned = true;
 
     if (earned) {
-      user.badges.push(b.id);
+      nextBadges.push(b.id);
       showToast(`🏆 ยินดีด้วย! ปลดล็อกบัดจ์ใหม่: "${b.name}" ${b.icon}`, 'success');
-      newBadgeUnlocked = true;
+      changed = true;
     }
   });
 
-  // Check frame unlocks based on reviews
-  if (!user.unlockedFrames) user.unlockedFrames = ["frame-none"];
-  if (userReviewCount >= 2 && !user.unlockedFrames.includes("frame-flame")) {
-    user.unlockedFrames.push("frame-flame");
+  if (userReviewCount >= 1 && !nextFrames.includes("frame-spu-pink")) {
+    nextFrames.push("frame-spu-pink");
+    showToast('🖼️ ปลดล็อกกรอบ "SPU Pink Ribbon" จากการเขียนรีวิวร้านแรก!', 'success');
+    changed = true;
+  }
+  if (userReviewCount >= 1 && !nextFrames.includes("frame-ramen-master")) {
+    nextFrames.push("frame-ramen-master");
+    showToast('🍜 ปลดล็อกกรอบ "Ramen Narutomaki" จากการเขียนรีวิวร้านแรก!', 'success');
+    changed = true;
+  }
+  if (userReviewCount >= 2 && !nextFrames.includes("frame-flame")) {
+    nextFrames.push("frame-flame");
     showToast('🖼️ ปลดล็อกกรอบ "Flame Food Master" จากการรีวิวครบ 2 ร้าน!', 'success');
+    changed = true;
+  }
+  if (userReviewCount >= 3 && !nextFrames.includes("frame-gold")) {
+    nextFrames.push("frame-gold");
+    showToast('⭐ ปลดล็อกกรอบ "Golden Foodie" จากการรีวิวครบ 3 ร้าน!', 'success');
+    changed = true;
   }
 
-  if (newBadgeUnlocked || user.unlockedFrames.length > 0) {
-    Store.set(STORAGE_KEYS.USERS, users);
-    const currentUser = getCurrentUser();
-    if (currentUser && currentUser.id === userId) {
-      setCurrentUser(user);
+  if (changed) {
+    user.badges = nextBadges;
+    user.unlockedFrames = nextFrames;
+    if (window.AuthService?.isConfigured()) {
+      try {
+        await window.AuthService.updateOwnProfile(user.uid || user.id, {
+          badges: nextBadges,
+          unlockedFrames: nextFrames
+        });
+      } catch (e) {}
+    }
+    if (currentUser && (currentUser.uid === userId || currentUser.id === userId)) {
+      AppState.currentUser = user;
+      renderBadgesShowcase();
     }
   }
 }
@@ -1691,15 +1892,24 @@ function renderLeaderboard() {
   const listEl = document.getElementById('leaderboardList');
   if (!listEl) return;
 
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
+  const users = AppState.users;
+  const reviews = AppState.reviews;
+
+  if (!users || users.length === 0) {
+    listEl.innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-muted); border: 1px dashed var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface-alt);">
+        🏆 ยังไม่มีข้อมูลสมาชิกบนตารางอันดับ — สมัครสมาชิกและเช็กอินเพื่อขึ้นอันดับหนึ่งได้เลย!
+      </div>
+    `;
+    return;
+  }
 
   // Sort by streak first, then by review count
   const sorted = [...users].sort((a, b) => {
     const streakDiff = (b.checkInStreak || 0) - (a.checkInStreak || 0);
     if (streakDiff !== 0) return streakDiff;
-    const aReviews = reviews.filter(r => r.userId === a.id).length;
-    const bReviews = reviews.filter(r => r.userId === b.id).length;
+    const aReviews = reviews.filter(r => r.userId === (a.uid || a.id)).length;
+    const bReviews = reviews.filter(r => r.userId === (b.uid || b.id)).length;
     return bReviews - aReviews;
   });
 
@@ -1710,15 +1920,15 @@ function renderLeaderboard() {
     else if (idx === 1) { rankBadge = '🥈'; rankClass = 'rank-2'; }
     else if (idx === 2) { rankBadge = '🥉'; rankClass = 'rank-3'; }
 
-    const userReviewCount = reviews.filter(r => r.userId === user.id).length;
+    const userReviewCount = reviews.filter(r => r.userId === (user.uid || user.id)).length;
 
     return `
       <div class="leader-item">
         <div class="leader-rank ${rankClass}">${rankBadge}</div>
-        <img src="${user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}" class="user-avatar leader-avatar ${user.equippedFrame || 'frame-none'}" alt="${user.name}">
+        ${renderFramedAvatar(user.avatar, user.equippedFrame || 'frame-none', 46, 'leader-avatar', user.name)}
         <div class="leader-info">
           <div class="leader-name">${user.name}</div>
-          <div class="leader-role">${user.customTitle || user.userType || 'สมาชิก SPU'}</div>
+          <div class="leader-role">${user.customTitle || user.userType || 'สมาชิกจานเด็ด SPU'}</div>
         </div>
         <div class="leader-points">🔥 ${user.checkInStreak || 0} วัน | 💬 ${userReviewCount} รีวิว</div>
       </div>
@@ -1753,6 +1963,13 @@ let wheelRestaurants = [];
 let wheelAngle = 0;
 let isSpinning = false;
 
+// Redraw the wheel once the cute web fonts (Mali / Itim) are loaded
+if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    if (typeof drawWheel === 'function' && !isSpinning) drawWheel();
+  });
+}
+
 function initWheel() {
   const canvas = document.getElementById('wheelCanvas');
   if (!canvas) return;
@@ -1760,7 +1977,7 @@ function initWheel() {
   const locSelect = document.getElementById('wheelLocationSelect');
   const selectedLoc = locSelect ? locSelect.value : 'all';
 
-  const allRestaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
+  const allRestaurants = AppState.restaurants;
   wheelRestaurants = allRestaurants.filter(r => selectedLoc === 'all' || r.location === selectedLoc);
 
   if (wheelRestaurants.length === 0) {
@@ -1794,16 +2011,16 @@ function drawWheel() {
     ctx.strokeStyle = 'rgba(150, 150, 150, 0.4)';
     ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#64748b';
+    ctx.fillStyle = '#5c4338';
     if (isAdmin()) {
-      ctx.font = 'bold 15px Prompt, Kanit, sans-serif';
-      ctx.fillText('ยังไม่มีร้านอาหารในระบบ', 0, -8);
-      ctx.font = '12px Prompt, Kanit, sans-serif';
-      ctx.fillText('➕ เพิ่มร้านอาหารเพื่อเริ่มหมุนวงล้อ', 0, 16);
+      ctx.font = '600 16px Mitr, Prompt, sans-serif';
+      ctx.fillText('🍽️ ยังไม่มีร้านอาหารในระบบ', 0, -8);
+      ctx.font = '13px Prompt, sans-serif';
+      ctx.fillText('➕ เพิ่มร้านอาหารเพื่อเริ่มหมุนจานสุ่มเมนู', 0, 16);
     } else {
-      ctx.font = 'bold 13px Prompt, Kanit, sans-serif';
-      ctx.fillText('ตอนนี้ยังไม่มีร้านแนะนำ', 0, -8);
-      ctx.font = '12px Prompt, Kanit, sans-serif';
+      ctx.font = '600 15px Mitr, Prompt, sans-serif';
+      ctx.fillText('🍽️ ตอนนี้ยังไม่มีร้านแนะนำ', 0, -8);
+      ctx.font = '13px Prompt, sans-serif';
       ctx.fillText('ลองมาใหม่ในรอบหน้านะครับ 🎲', 0, 16);
     }
     ctx.restore();
@@ -1811,10 +2028,10 @@ function drawWheel() {
   }
   const sliceAngle = (2 * Math.PI) / numSlices;
 
+  // Appetizing Thai Street-Food & Bistro Palette
   const colors = [
-    '#f97316', '#ea580c', '#f59e0b', '#d97706',
-    '#0ea5e9', '#0284c7', '#10b981', '#059669',
-    '#8b5cf6', '#7c3aed', '#ec4899', '#db2777'
+    '#e03e1a', '#f59e0b', '#2b7a4b', '#d97706',
+    '#c2410c', '#eab308', '#15803d', '#b45309'
   ];
 
   ctx.save();
@@ -1832,24 +2049,33 @@ function drawWheel() {
     ctx.closePath();
     ctx.fillStyle = colors[i % colors.length];
     ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#fff8ee';
     ctx.stroke();
 
-    // Draw text
+    // Draw restaurant name on plate slice
     ctx.save();
     ctx.rotate(startAngle + sliceAngle / 2);
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 13px Prompt, Kanit, sans-serif';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 4;
+    ctx.font = '500 14px Mitr, Prompt, sans-serif';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = 'rgba(44, 29, 22, 0.75)';
 
     let text = wheelRestaurants[i].name;
     if (text.length > 14) text = text.substring(0, 13) + '...';
+    ctx.strokeText(text, radius - 20, 5);
+    ctx.fillStyle = '#ffffff';
     ctx.fillText(text, radius - 20, 5);
     ctx.restore();
   }
+
+  // Ceramic & Wood Bistro Plate Rim
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, 2 * Math.PI);
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = '#3b2419';
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -1939,6 +2165,8 @@ function finalizeWheelResult() {
     const winnerImg = winner.image || (winner.images && winner.images[0]) || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400';
     const recMenus = (winner.menus || []).filter(m => m.isRecommended);
     const displayMenus = recMenus.length > 0 ? recMenus : (winner.menus || []).slice(0, 3);
+    const winnerStats = calculateRestaurantRating(winner.id);
+    const winnerRatingLabel = winnerStats.count > 0 ? `⭐ ${winnerStats.avg.toFixed(1)} (${winnerStats.count})` : '⭐ ยังไม่มีรีวิว';
 
     resultBox.innerHTML = `
       <div class="result-badge" style="display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 0.85rem;">
@@ -1957,9 +2185,9 @@ function finalizeWheelResult() {
         </div>
 
         <div style="padding: 1.15rem;">
-          <h3 style="font-size: 1.35rem; font-weight: 800; color: var(--text-color); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <h3 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <span>🍽️ ${winner.name}</span>
-            <span style="font-size: 0.85rem; color: #f59e0b; font-weight: 700;">⭐ ${(winner.rating || 5.0).toFixed(1)}</span>
+            <span style="font-size: 0.85rem; color: #f59e0b; font-weight: 700;">${winnerRatingLabel}</span>
           </h3>
 
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.85rem; line-height: 1.5;">
@@ -1975,7 +2203,7 @@ function finalizeWheelResult() {
               <div style="display: flex; flex-direction: column; gap: 0.4rem;">
                 ${displayMenus.map(m => `
                   <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem; background: var(--bg-surface); padding: 0.4rem 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                    <span style="font-weight: 700; color: var(--text-color);">✨ ${m.name}</span>
+                    <span style="font-weight: 700; color: var(--text-main);">✨ ${m.name}</span>
                     <span style="color: var(--primary); font-weight: 800; white-space: nowrap;">${m.price} บาท</span>
                   </div>
                 `).join('')}
@@ -2004,34 +2232,443 @@ function finalizeWheelResult() {
 }
 
 // ============================================================================
+// 10.5 Smart Budget Combo Planner (ระบบจัดเซตมื้อเที่ยงตามงบ - ซิงค์ข้อมูลจริง 100%)
+// ============================================================================
+
+function isDrinkOrDessertItem(category = '', menuName = '') {
+  const cleaned = `${category} ${menuName}`
+    .toLowerCase()
+    .replace(/ชาบู|สุกี้น้ำ|ต้มยำน้ำ|น้ำซุป|น้ำตก|น้ำมันหอย|น้ำจิ้ม/g, '');
+  const keywords = ['เครื่องดื่ม', 'ของหวาน', 'เบเกอรี่', 'วาฟเฟิล', 'คาเฟ่', 'ชา', 'กาแฟ', 'โกโก้', 'นมสด', 'น้ำ', 'โซดา', 'ปั่น', 'ไอศกรีม', 'บิงซู', 'เค้ก', 'เครป', 'เฉาก๊วย', 'ขนม', 'โยเกิร์ต', 'สมูทตี้', 'บราวนี่', 'yogurt', 'smoothie', 'waffle', 'cafe', 'tea', 'coffee'];
+  return keywords.some(k => cleaned.includes(k));
+}
+
+function getBudgetComboPools(locationFilter = 'all', priceRangeFilter = 'all') {
+  const mains = [];
+  const sides = [];
+
+  const restaurants = Array.isArray(AppState.restaurants) ? AppState.restaurants : [];
+  restaurants.forEach(r => {
+    if (locationFilter !== 'all' && r.location !== locationFilter) return;
+    const rImg = r.image || (Array.isArray(r.images) && r.images[0]) || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=320';
+    const menuList = Array.isArray(r.menus) && r.menus.length > 0
+      ? r.menus.filter(m => m && (m.name || r.name))
+      : [{ name: r.name, price: Number(r.avgPrice) || 45, image: rImg }];
+
+    menuList.forEach(m => {
+      const itemPrice = Number(m.price) || Number(r.avgPrice) || 0;
+      if (itemPrice <= 0) return;
+
+      if (priceRangeFilter === 'under40' && !(itemPrice < 40)) return;
+      if (priceRangeFilter === '40-60' && !(itemPrice >= 40 && itemPrice <= 60)) return;
+      if (priceRangeFilter === '60-100' && !(itemPrice > 60 && itemPrice <= 100)) return;
+      if (priceRangeFilter === 'over100' && !(itemPrice > 100)) return;
+
+      const entry = {
+        name: m.name || r.name,
+        price: itemPrice,
+        shopName: r.name,
+        location: r.location || 'ม.ศรีปทุม',
+        image: m.image || rImg,
+        restaurantId: r.id || ''
+      };
+      if (isDrinkOrDessertItem(r.category, m.name)) {
+        sides.push(entry);
+      } else {
+        mains.push(entry);
+      }
+    });
+  });
+
+  return { mains, sides };
+}
+
+function renderBudgetComboIdleState() {
+  const resultEl = document.getElementById('budgetComboResult');
+  if (!resultEl) return;
+  const totalRestaurants = Array.isArray(AppState.restaurants) ? AppState.restaurants.length : 0;
+  if (totalRestaurants === 0) {
+    resultEl.innerHTML = `
+      <div style="text-align: center; padding: 1.5rem; color: var(--text-muted); background: var(--bg-surface-alt); border-radius: var(--radius-lg); border: 1.5px dashed var(--border-color);">
+        <div style="font-size: 2rem; margin-bottom: 0.4rem;">🍽️</div>
+        <div style="font-family: var(--font-heading); font-size: 1.05rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.25rem;">
+          ยังไม่มีเมนูในขณะนี้ รอเพิ่มเติม
+        </div>
+        <div style="font-size: 0.85rem;">
+          ระบบซิงค์จากข้อมูลร้านอาหารจริงในระบบ เมื่อแอดมินเพิ่มร้านและเมนูแล้วจะสามารถสุ่มจัดเซตได้ทันทีครับ
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  resultEl.innerHTML = `
+    <div style="text-align: center; padding: 1.35rem; color: var(--text-muted); background: var(--bg-surface-alt); border-radius: var(--radius-lg); border: 1.5px dashed var(--border-color);">
+      <div style="font-size: 1.65rem; margin-bottom: 0.35rem;">🍱</div>
+      <div style="font-family: var(--font-heading); font-size: 1rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.2rem;">
+        เลือกงบประมาณหรือตัวกรองด้านบน แล้วกดปุ่ม "🎲 สุ่มจัดเซตตามงบเลย!"
+      </div>
+      <div style="font-size: 0.84rem;">
+        ระบบจะจับคู่เมนูจากร้านที่มีอยู่จริงในระบบให้คุณเมื่อกดปุ่มสุ่มครับ
+      </div>
+    </div>
+  `;
+}
+
+function selectBudgetPreset(amount, btnEl) {
+  const input = document.getElementById('budgetComboInput');
+  if (input) input.value = amount;
+  document.querySelectorAll('.budget-preset-pill').forEach(p => {
+    p.classList.toggle('active', Number(p.getAttribute('data-budget')) === Number(amount));
+  });
+  if (typeof SoundFX !== 'undefined' && SoundFX.playTick) {
+    SoundFX.playTick();
+  }
+}
+
+function openBudgetComboPlanner() {
+  switchAppView('roulette');
+  setTimeout(() => {
+    const card = document.getElementById('budgetComboSectionCard');
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    const resEl = document.getElementById('budgetComboResult');
+    if (resEl && !resEl.innerHTML.trim()) {
+      renderBudgetComboIdleState();
+    }
+  }, 80);
+}
+
+let lastComboSignature = '';
+
+function generateBudgetCombo(silent = false) {
+  const inputEl = document.getElementById('budgetComboInput');
+  const locEl = document.getElementById('budgetComboLocation');
+  const priceRangeEl = document.getElementById('budgetComboPriceFilter');
+  const resultEl = document.getElementById('budgetComboResult');
+  if (!resultEl) return;
+
+  const budget = Math.max(1, Number(inputEl?.value) || 65);
+  const locationFilter = locEl?.value || 'all';
+  const priceRangeFilter = priceRangeEl?.value || 'all';
+
+  document.querySelectorAll('.budget-preset-pill').forEach(p => {
+    p.classList.toggle('active', Number(p.getAttribute('data-budget')) === budget);
+  });
+
+  if (!silent && typeof SoundFX !== 'undefined' && SoundFX.playTick) {
+    SoundFX.playTick();
+  }
+
+  const { mains, sides } = getBudgetComboPools(locationFilter, priceRangeFilter);
+
+  // Case 1: No menus exist in database at all (or none in selected filter)
+  if (mains.length === 0 && sides.length === 0) {
+    resultEl.innerHTML = `
+      <div style="text-align: center; padding: 1.5rem; color: var(--text-muted); background: var(--bg-surface-alt); border-radius: var(--radius-lg); border: 1.5px dashed var(--border-color);">
+        <div style="font-size: 2rem; margin-bottom: 0.4rem;">🍽️</div>
+        <div style="font-family: var(--font-heading); font-size: 1.08rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.25rem;">
+          ยังไม่มีเมนูในขณะนี้ รอเพิ่มเติม
+        </div>
+        <div style="font-size: 0.85rem;">
+          ขณะนี้ยังไม่มีรายการเมนูในพิกัดหรือช่วงราคาที่เลือก รออัปเดตเมนูเพิ่มเติมเร็วๆ นี้ครับ
+        </div>
+      </div>
+    `;
+    if (!silent) {
+      showToast('ยังไม่มีเมนูในขณะนี้ รอเพิ่มเติมครับ', 'info');
+    }
+    return;
+  }
+
+  // Case 2: Both Main Dishes and Drinks/Desserts exist — find pairs within budget
+  const validPairs = [];
+  mains.forEach(m => {
+    sides.forEach(s => {
+      const total = m.price + s.price;
+      if (total <= budget) {
+        validPairs.push({ main: m, side: s, total });
+      }
+    });
+  });
+
+  if (validPairs.length > 0) {
+    validPairs.sort((a, b) => b.total - a.total);
+    const candidatePool = validPairs.slice(0, Math.min(validPairs.length, 10));
+    let chosen = candidatePool[Math.floor(Math.random() * candidatePool.length)];
+    if (candidatePool.length > 1) {
+      const sig = `${chosen.main.name}|${chosen.side.name}`;
+      if (sig === lastComboSignature) {
+        const alt = candidatePool.find(c => `${c.main.name}|${c.side.name}` !== lastComboSignature);
+        if (alt) chosen = alt;
+      }
+    }
+    lastComboSignature = `${chosen.main.name}|${chosen.side.name}`;
+
+    const change = budget - chosen.total;
+    const usedPercent = Math.min(100, Math.round((chosen.total / budget) * 100));
+
+    resultEl.innerHTML = `
+      <div class="combo-items-grid">
+        <!-- Main Dish Card -->
+        <div class="combo-item-card">
+          <img src="${escapeHtml(chosen.main.image)}" alt="${escapeHtml(chosen.main.name)}" class="combo-item-thumb" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=240'">
+          <div class="combo-item-body">
+            <span class="combo-item-role">🍛 จานหลักอิ่มท้อง</span>
+            <div class="combo-item-name">${escapeHtml(chosen.main.name)}</div>
+            <div class="combo-item-shop">🏪 ${escapeHtml(chosen.main.shopName)} · 📍 ${escapeHtml(chosen.main.location)}</div>
+            <div class="combo-item-footer">
+              <span class="combo-item-price">💵 ${chosen.main.price} บาท</span>
+              ${chosen.main.restaurantId ? `<button type="button" class="btn btn-outline btn-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" onclick="openRestaurantDetail('${chosen.main.restaurantId}')">ดูร้านนี้</button>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div class="combo-plus-divider" aria-hidden="true">+</div>
+
+        <!-- Drink / Dessert Card -->
+        <div class="combo-item-card">
+          <img src="${escapeHtml(chosen.side.image)}" alt="${escapeHtml(chosen.side.name)}" class="combo-item-thumb" onerror="this.src='https://images.unsplash.com/photo-1558857563-b371033873b8?w=240'">
+          <div class="combo-item-body">
+            <span class="combo-item-role">🧋 เครื่องดื่ม / ของหวาน</span>
+            <div class="combo-item-name">${escapeHtml(chosen.side.name)}</div>
+            <div class="combo-item-shop">🏪 ${escapeHtml(chosen.side.shopName)} · 📍 ${escapeHtml(chosen.side.location)}</div>
+            <div class="combo-item-footer">
+              <span class="combo-item-price">💵 ${chosen.side.price} บาท</span>
+              ${chosen.side.restaurantId ? `<button type="button" class="btn btn-outline btn-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" onclick="openRestaurantDetail('${chosen.side.restaurantId}')">ดูร้านนี้</button>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Budget Breakdown Summary Bar -->
+      <div class="combo-summary-bar">
+        <div style="flex: 1; min-width: 220px;">
+          <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap; margin-bottom: 0.35rem;">
+            <span style="font-family: var(--font-heading); font-size: 1.1rem; font-weight: 600; color: var(--text-main);">
+              🧾 ราคารวมทั้งเซต: <strong style="color: var(--primary); font-size: 1.25rem;">${chosen.total} บาท</strong>
+            </span>
+            <span style="font-size: 0.85rem; color: var(--text-muted);">(จากงบ ${budget} บาท · ใช้ไป ${usedPercent}%)</span>
+          </div>
+          <div style="font-size: 0.88rem; font-weight: 600; color: #10b981;">
+            ${change > 0 ? `🎉 ประหยัดงบ! มีเงินทอนเหลือเก็บ ${change} บาท` : `✨ พอดีเป๊ะกับงบ ${budget} บาท คุ้มสุดๆ!`}
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="generateBudgetCombo(false)">
+          🔄 สุ่มเซตใหม่อีกครั้ง
+        </button>
+      </div>
+    `;
+
+    if (!silent) {
+      showToast(`🍱 จัดเซตสำเร็จ! "${chosen.main.name} + ${chosen.side.name}" รวม ${chosen.total}฿ (เหลือเงินทอน ${change}฿)`, 'success');
+    }
+    return;
+  }
+
+  // Case 3: Only one category exists within budget (e.g. only Drink/Dessert or only Main Dish exists in DB)
+  const affordableMains = mains.filter(m => m.price <= budget);
+  const affordableSides = sides.filter(s => s.price <= budget);
+
+  if (affordableMains.length > 0 || affordableSides.length > 0) {
+    const pickMain = affordableMains.length > 0 ? affordableMains[Math.floor(Math.random() * affordableMains.length)] : null;
+    const pickSide = affordableSides.length > 0 ? affordableSides[Math.floor(Math.random() * affordableSides.length)] : null;
+    const total = (pickMain ? pickMain.price : 0) + (pickSide ? pickSide.price : 0);
+    const change = budget - total;
+
+    resultEl.innerHTML = `
+      <div class="combo-items-grid">
+        <!-- Main Dish Slot -->
+        ${pickMain ? `
+          <div class="combo-item-card">
+            <img src="${escapeHtml(pickMain.image)}" alt="${escapeHtml(pickMain.name)}" class="combo-item-thumb" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=240'">
+            <div class="combo-item-body">
+              <span class="combo-item-role">🍛 จานหลักอิ่มท้อง</span>
+              <div class="combo-item-name">${escapeHtml(pickMain.name)}</div>
+              <div class="combo-item-shop">🏪 ${escapeHtml(pickMain.shopName)} · 📍 ${escapeHtml(pickMain.location)}</div>
+              <div class="combo-item-footer">
+                <span class="combo-item-price">💵 ${pickMain.price} บาท</span>
+                ${pickMain.restaurantId ? `<button type="button" class="btn btn-outline btn-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" onclick="openRestaurantDetail('${pickMain.restaurantId}')">ดูร้านนี้</button>` : ''}
+              </div>
+            </div>
+          </div>
+        ` : `
+          <div class="combo-item-card" style="justify-content: center; text-align: center; border-style: dashed; opacity: 0.88;">
+            <div class="combo-item-body">
+              <span class="combo-item-role">🍛 จานหลักอิ่มท้อง</span>
+              <div class="combo-item-name" style="margin-top: 0.25rem;">⏳ ยังไม่มีเมนูอาหารจานหลักในขณะนี้</div>
+              <div class="combo-item-shop" style="margin-bottom: 0;">รออัปเดตเมนูเพิ่มเติมในระบบ</div>
+            </div>
+          </div>
+        `}
+
+        <div class="combo-plus-divider" aria-hidden="true">+</div>
+
+        <!-- Drink / Dessert Slot -->
+        ${pickSide ? `
+          <div class="combo-item-card">
+            <img src="${escapeHtml(pickSide.image)}" alt="${escapeHtml(pickSide.name)}" class="combo-item-thumb" onerror="this.src='https://images.unsplash.com/photo-1558857563-b371033873b8?w=240'">
+            <div class="combo-item-body">
+              <span class="combo-item-role">🧋 เครื่องดื่ม / ของหวาน</span>
+              <div class="combo-item-name">${escapeHtml(pickSide.name)}</div>
+              <div class="combo-item-shop">🏪 ${escapeHtml(pickSide.shopName)} · 📍 ${escapeHtml(pickSide.location)}</div>
+              <div class="combo-item-footer">
+                <span class="combo-item-price">💵 ${pickSide.price} บาท</span>
+                ${pickSide.restaurantId ? `<button type="button" class="btn btn-outline btn-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" onclick="openRestaurantDetail('${pickSide.restaurantId}')">ดูร้านนี้</button>` : ''}
+              </div>
+            </div>
+          </div>
+        ` : `
+          <div class="combo-item-card" style="justify-content: center; text-align: center; border-style: dashed; opacity: 0.88;">
+            <div class="combo-item-body">
+              <span class="combo-item-role">🧋 เครื่องดื่ม / ของหวาน</span>
+              <div class="combo-item-name" style="margin-top: 0.25rem;">⏳ ยังไม่มีเมนูน้ำ/ของหวานในขณะนี้</div>
+              <div class="combo-item-shop" style="margin-bottom: 0;">รออัปเดตเมนูเพิ่มเติมในระบบ</div>
+            </div>
+          </div>
+        `}
+      </div>
+
+      <div class="combo-summary-bar">
+        <div style="flex: 1; min-width: 220px;">
+          <div style="font-family: var(--font-heading); font-size: 1.05rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.2rem;">
+            🧾 ราคาเมนูที่มีในระบบตอนนี้: <strong style="color: var(--primary); font-size: 1.2rem;">${total} บาท</strong> (เหลือเงินทอน ${change} บาท)
+          </div>
+          <div style="font-size: 0.82rem; color: var(--text-muted);">
+            * อีกหมวดหมู่ยังไม่มีเมนูในขณะนี้ รออัปเดตเมนูเพิ่มเติมครับ
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="generateBudgetCombo(false)">
+          🔄 สุ่มใหม่อีกครั้ง
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  // Case 4: Menus exist in DB, but none fit within the entered budget
+  resultEl.innerHTML = `
+    <div style="text-align: center; padding: 1.5rem; color: var(--text-muted); background: var(--bg-surface-alt); border-radius: var(--radius-lg); border: 1.5px dashed var(--border-color);">
+      <div style="font-size: 1.8rem; margin-bottom: 0.35rem;">💡</div>
+      <div style="font-family: var(--font-heading); font-size: 1.05rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.25rem;">
+        ยังไม่มีเมนูที่อยู่ในงบ ${budget} บาทในขณะนี้ รอเพิ่มเติม
+      </div>
+      <div style="font-size: 0.85rem;">
+        ลองปรับเพิ่มงบประมาณ หรือเปลี่ยนตัวกรองช่วงราคา/พิกัดดูนะครับ
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================================
 // 11. Daily Check-In & Profile Frames Engine (ระบบเช็กอินรายวันสะสมฉายาและกรอบ)
 // ============================================================================
 
-function getTodayDateString() {
-  const d = new Date();
+function formatYmdFromDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getTodayDateString() {
+  return formatYmdFromDate(new Date());
+}
+
+const THAI_SHORT_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const THAI_WEEKDAYS_SUN_START = [
+  { dow: 0, shortName: 'อา.', fullName: 'วันอาทิตย์' },
+  { dow: 1, shortName: 'จ.', fullName: 'วันจันทร์' },
+  { dow: 2, shortName: 'อ.', fullName: 'วันอังคาร' },
+  { dow: 3, shortName: 'พ.', fullName: 'วันพุธ' },
+  { dow: 4, shortName: 'พฤ.', fullName: 'วันพฤหัสบดี' },
+  { dow: 5, shortName: 'ศ.', fullName: 'วันศุกร์' },
+  { dow: 6, shortName: 'ส.', fullName: 'วันเสาร์' }
+];
+
+function formatThaiShortDate(d) {
+  return `${d.getDate()} ${THAI_SHORT_MONTHS[d.getMonth()]}`;
+}
+
+/**
+ * คำนวณรอบสัปดาห์เช็กอิน (วันอาทิตย์ – วันเสาร์)
+ * รีเซ็ตตารางอัตโนมัติทุกคืนวันเสาร์เวลา 00:00 น. (เที่ยงคืนขึ้นวันอาทิตย์ = เริ่มสัปดาห์ใหม่ทันที)
+ */
+function getCurrentCheckInWeekInfo(refDate = new Date()) {
+  const today = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
+  const todayDow = today.getDay(); // 0 = อาทิตย์ ... 6 = เสาร์
+  const sundayDate = new Date(today);
+  sundayDate.setDate(today.getDate() - todayDow);
+  const saturdayDate = new Date(sundayDate);
+  saturdayDate.setDate(sundayDate.getDate() + 6);
+
+  const days = THAI_WEEKDAYS_SUN_START.map((w, idx) => {
+    const dayDate = new Date(sundayDate);
+    dayDate.setDate(sundayDate.getDate() + idx);
+    return {
+      ...w,
+      dayNum: idx + 1,
+      dateStr: formatYmdFromDate(dayDate),
+      shortDate: formatThaiShortDate(dayDate)
+    };
+  });
+
+  return {
+    weekKey: formatYmdFromDate(sundayDate),
+    sundayDate,
+    saturdayDate,
+    todayStr: formatYmdFromDate(today),
+    todayDow,
+    rangeLabel: `อา. ${formatThaiShortDate(sundayDate)} – ส. ${formatThaiShortDate(saturdayDate)}`,
+    days
+  };
+}
+
+function getCurrentWeekCheckedDates(user, weekInfo = getCurrentCheckInWeekInfo()) {
+  if (!user) return [];
+  const validSet = new Set(weekInfo.days.map(d => d.dateStr));
+  const collected = new Set();
+
+  if (Array.isArray(user.weeklyCheckInDates)) {
+    user.weeklyCheckInDates.forEach(ds => {
+      if (validSet.has(ds)) collected.add(ds);
+    });
+  }
+  if (user.lastCheckInDate && validSet.has(user.lastCheckInDate)) {
+    collected.add(user.lastCheckInDate);
+  }
+  if (AppState.checkedInTodayDate && validSet.has(AppState.checkedInTodayDate)) {
+    collected.add(AppState.checkedInTodayDate);
+  }
+  return Array.from(collected).sort();
+}
+
+let midnightCheckInTimerId = null;
+function scheduleMidnightCheckInRefresh() {
+  if (midnightCheckInTimerId) clearTimeout(midnightCheckInTimerId);
+  const now = new Date();
+  const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+  const msUntilMidnight = Math.max(1000, nextMidnight.getTime() - now.getTime());
+  midnightCheckInTimerId = setTimeout(() => {
+    AppState.checkedInTodayDate = null;
+    if (typeof renderDailyCheckIn === 'function') renderDailyCheckIn();
+    scheduleMidnightCheckInRefresh();
+  }, msUntilMidnight);
+}
+
+function calcDateDiffDays(fromYmd, toYmd) {
+  if (!fromYmd || !toYmd) return null;
+  const p1 = String(fromYmd).split('-').map(Number);
+  const p2 = String(toYmd).split('-').map(Number);
+  if (p1.length !== 3 || p2.length !== 3) return null;
+  const utc1 = Date.UTC(p1[0], p1[1] - 1, p1[2]);
+  const utc2 = Date.UTC(p2[0], p2[1] - 1, p2[2]);
+  return Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
 }
 
 function hasUserCheckedInToday(user) {
   if (!user) return false;
   const todayStr = getTodayDateString();
-
-  // 1. Check user object attribute
-  if (user.lastCheckInDate === todayStr) return true;
-
-  // 2. Check persistent localStorage key by user ID
-  if (user.id && localStorage.getItem(`spu_last_checkin_${user.id}`) === todayStr) {
-    user.lastCheckInDate = todayStr;
-    return true;
-  }
-
-  // 3. Check persistent localStorage key by user Email
-  if (user.email && localStorage.getItem(`spu_last_checkin_email_${user.email.toLowerCase()}`) === todayStr) {
-    user.lastCheckInDate = todayStr;
-    return true;
-  }
-
-  return false;
+  const weekDates = Array.isArray(user.weeklyCheckInDates) ? user.weeklyCheckInDates : [];
+  return user.lastCheckInDate === todayStr || AppState.checkedInTodayDate === todayStr || weekDates.includes(todayStr);
 }
 
 function renderDailyCheckIn() {
@@ -2039,112 +2676,134 @@ function renderDailyCheckIn() {
   if (!container) return;
 
   const user = getCurrentUser();
+  const weekInfo = getCurrentCheckInWeekInfo();
+  const checkedDatesThisWeek = getCurrentWeekCheckedDates(user, weekInfo);
+  const checkedSet = new Set(checkedDatesThisWeek);
   const checkedInToday = user ? hasUserCheckedInToday(user) : false;
   const currentStreak = user ? (user.checkInStreak || 0) : 0;
   const isAdminUser = user && user.role === 'admin';
 
-  // Calculate current week and day in current 7-day cycle
-  // If user checked in today: they are at currentStreak
-  // If user hasn't checked in today: they are targeting currentStreak + 1
+  // Milestone reward progression follows the continuous cumulative flame streak (never reset on Saturday midnight)
   const targetStreak = checkedInToday ? Math.max(1, currentStreak) : (currentStreak + 1);
-  const currentWeek = Math.max(1, Math.floor((targetStreak - 1) / 7) + 1);
-  const weekRewardIndex = Math.min(currentWeek - 1, WEEKLY_REWARDS_CALENDAR.length - 1);
+  const rewardWeekNum = Math.max(1, Math.floor((targetStreak - 1) / 7) + 1);
+  const weekRewardIndex = Math.min(rewardWeekNum - 1, WEEKLY_REWARDS_CALENDAR.length - 1);
   const currentWeekReward = WEEKLY_REWARDS_CALENDAR[weekRewardIndex];
+  const nextMilestoneDay = rewardWeekNum * 7;
+  const daysRemainingForReward = Math.max(0, nextMilestoneDay - currentStreak);
 
-  // Day inside current 7-day cycle (1 to 7)
-  const dayInCycle = currentStreak === 0 ? 0 : (((currentStreak - 1) % 7) + 1);
-  const activeDay = checkedInToday ? dayInCycle : ((currentStreak % 7) + 1);
+  // Generate 7-day Sun–Sat cards (resets every Saturday at 00:00 midnight -> Sunday starts fresh week)
+  const icons = ["☀️", "🌱", "🥢", "🍱", "🍜", "🍛", currentWeekReward.frameIcon];
+  const daysHtml = weekInfo.days.map((dayObj, idx) => {
+    const isCompleted = checkedSet.has(dayObj.dateStr);
+    const isToday = dayObj.dateStr === weekInfo.todayStr;
+    const isPastMissed = !isCompleted && dayObj.dateStr < weekInfo.todayStr;
+    const isSaturday = dayObj.dow === 6;
 
-  // Generate 7-day cards for current week
-  const icons = ["🌱", "🥢", "🍱", "🍜", "🍛", "🍲"];
-  const daysHtml = [1, 2, 3, 4, 5, 6, 7].map(dayNum => {
-    const absoluteDay = (currentWeek - 1) * 7 + dayNum;
-    const isCompleted = checkedInToday ? (dayNum <= dayInCycle) : (dayNum < activeDay);
-    const isToday = !checkedInToday && (dayNum === activeDay);
-
-    if (dayNum === 7) {
+    if (isSaturday) {
       return `
-        <div class="checkin-day-card ${isCompleted ? 'completed' : ''} ${isToday ? 'active-today' : ''}" style="border-color: ${currentWeekReward.color};">
-          <div class="checkin-day-number">วันที่ 7 (ครบ ${absoluteDay} วัน)</div>
-          <div class="checkin-day-icon">${isCompleted ? '✅' : currentWeekReward.frameIcon}</div>
-          <div class="checkin-day-reward" style="color: ${currentWeekReward.color}; font-size: 0.8rem; font-weight: 800;">
-            ${currentWeekReward.frameName}
+        <div class="checkin-day-card ${isCompleted ? 'completed' : ''} ${isToday && !isCompleted ? 'active-today' : ''} ${isPastMissed ? 'past-missed' : ''}" style="border-color: ${isCompleted ? '#10b981' : currentWeekReward.color};">
+          <div class="checkin-day-number">${dayObj.fullName} (${dayObj.shortDate})</div>
+          <div class="checkin-day-icon">${isCompleted ? '✅' : icons[idx]}</div>
+          <div class="checkin-day-reward" style="color: ${isCompleted ? '#10b981' : currentWeekReward.color}; font-size: 0.78rem; font-weight: 800;">
+            ${isCompleted ? 'เช็กอินแล้ว 🔥' : (isToday ? 'วันนี้ (วันสุดท้ายของสัปดาห์)' : 'สิ้นสัปดาห์ · รีเซ็ต 00:00 น.')}
           </div>
-          <div class="checkin-day-bonus">👑 ฉายา '${currentWeekReward.title}'</div>
+          <div class="checkin-day-bonus">🎁 รางวัลครบ ${nextMilestoneDay} วัน: ${currentWeekReward.frameName}</div>
         </div>
       `;
     }
 
     return `
-      <div class="checkin-day-card ${isCompleted ? 'completed' : ''} ${isToday ? 'active-today' : ''}">
-        <div class="checkin-day-number">วันที่ ${dayNum} (${absoluteDay} วัน)</div>
-        <div class="checkin-day-icon">${isCompleted ? '✅' : icons[dayNum - 1]}</div>
-        <div class="checkin-day-reward">สะสมสตรีค 🔥</div>
-        <div class="checkin-day-bonus">วันที่ ${dayNum}/7 ของสัปดาห์ที่ ${currentWeek}</div>
+      <div class="checkin-day-card ${isCompleted ? 'completed' : ''} ${isToday && !isCompleted ? 'active-today' : ''} ${isPastMissed ? 'past-missed' : ''}">
+        <div class="checkin-day-number">${dayObj.fullName} (${dayObj.shortDate})</div>
+        <div class="checkin-day-icon">${isCompleted ? '✅' : (isPastMissed ? '⏳' : icons[idx])}</div>
+        <div class="checkin-day-reward">${isCompleted ? 'เช็กอินแล้ว 🔥' : (isToday ? 'กดเช็กอินวันนี้ 🔥' : (isPastMissed ? 'ผ่านไปแล้ว' : 'รอเช็กอิน 🔥'))}</div>
+        <div class="checkin-day-bonus">${dayObj.dow === 0 ? 'เริ่มสัปดาห์ใหม่' : `วันที่ ${dayObj.dayNum}/7 ของสัปดาห์นี้`}</div>
       </div>
     `;
   }).join('');
+
+  const isCalendarTab = currentCheckinSubTab !== 'closet';
 
   container.innerHTML = `
     <div class="checkin-header">
       <div>
         <h3 style="font-size: 1.35rem; margin-bottom: 0.25rem;">🗓️ ตารางล็อกอินสะสมรายวัน</h3>
         <p style="font-size: 0.875rem; color: var(--text-muted);">
-          ${user ? `ผู้ใช้งาน: <strong>${user.name}</strong> ${isAdminUser ? '<span style="color: #eab308; font-weight: 800;">(👑 ผู้ดูแลระบบ - เข้าถึงของรางวัลทั้งหมดได้ทันที)</span>' : ''} | กำลังอยู่ที่: <strong>สัปดาห์ที่ ${currentWeek} (วันที่ ${dayInCycle || 1}/7)</strong> | เลขไฟสะสม: <strong>🔥 ${currentStreak} วัน</strong>` : 'กรุณาเข้าสู่ระบบเพื่อเริ่มล็อกอินสะสมสตรีคและรับของรางวัล'}
+          ${user ? `ผู้ใช้งาน: <strong>${user.name}</strong> ${isAdminUser ? '<span style="color: #eab308; font-weight: 800;">(👑 ผู้ดูแลระบบ - เข้าถึงของรางวัลทั้งหมดได้ทันที)</span>' : ''} | สัปดาห์นี้ (${weekInfo.rangeLabel}): <strong>${checkedDatesThisWeek.length}/7 วัน</strong> | ไฟสะสมต่อเนื่อง: <strong>🔥 ${currentStreak} วัน</strong>` : 'กรุณาเข้าสู่ระบบเพื่อเริ่มล็อกอินสะสมสตรีคและรับของรางวัล'}
         </p>
+        <div class="checkin-reset-note">
+          🔄 รีเซ็ตตารางสัปดาห์ใหม่ทุกคืนวันเสาร์ 00:00 น. (เริ่มวันอาทิตย์) • 🔥 ไฟสะสมต่อเนื่องไม่ถูกรีเซ็ต
+        </div>
       </div>
       <div>
         <div class="checkin-streak-badge">
-          🔥 สตรีคสะสมต่อเนื่อง: ${currentStreak} วัน
+          🔥 ไฟสะสมต่อเนื่อง: ${currentStreak} วัน
         </div>
       </div>
     </div>
 
-    <!-- Current Week 7-Day Cycle Grid -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-      <div style="font-weight: 800; font-size: 1.05rem;">
-        📅 ปฏิทินสัปดาห์ที่ ${currentWeek}: <span style="color: ${currentWeekReward.color};">${currentWeekReward.weekName}</span>
-      </div>
-      <div style="font-size: 0.825rem; color: var(--text-muted);">
-        เป้าหมายรางวัลใหญ่สัปดาห์นี้: <strong>${currentWeekReward.frameName}</strong> + ฉายา <strong>"${currentWeekReward.title}"</strong>
-      </div>
-    </div>
-
-    <div class="checkin-days-grid">
-      ${daysHtml}
-    </div>
-
-    <div style="text-align: center; margin-bottom: 1.75rem;">
-      <button type="button" class="btn ${checkedInToday ? 'btn-outline' : 'btn-primary'} btn-lg" 
-              onclick="handleDailyCheckIn()" ${checkedInToday ? 'disabled' : ''}>
-        ${checkedInToday 
-          ? `✅ วันนี้คุณจุดไฟสตรีคแล้ว 🔥 ${currentStreak} วัน (กลับมาเช็กอินใหม่พรุ่งนี้นะครับ!)` 
-          : `🎁 กดเช็กอินสะสมสตรีควันนี้ (ก้าวสู่สตรีค 🔥 ${currentStreak + 1} วัน)`}
+    <!-- Inner Sub-Tab Switcher (Calendar vs Frames Closet) -->
+    <div class="checkin-subtab-bar">
+      <button type="button" class="tab-btn ${isCalendarTab ? 'active' : ''}" onclick="switchCheckinSubTab('calendar')">
+        📅 ตารางสัปดาห์นี้ (${weekInfo.rangeLabel})
+      </button>
+      <button type="button" class="tab-btn ${!isCalendarTab ? 'active' : ''}" onclick="switchCheckinSubTab('closet')">
+        🖼️ ตู้เสื้อผ้ากรอบรูปโปรไฟล์ (${PROFILE_FRAMES.length} แบบ)
       </button>
     </div>
 
-    <!-- Profile Frames Closet Showcase -->
-    <div class="frames-closet-container">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+    <!-- SUB-TAB 1: Current Week Sun-Sat Grid -->
+    <div class="checkin-subpane" style="display: ${isCalendarTab ? 'block' : 'none'};">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div style="font-weight: 800; font-size: 1.02rem;">
+          📅 รอบสัปดาห์นี้: <span style="color: var(--primary);">${weekInfo.rangeLabel}</span> (เช็กอินแล้ว ${checkedDatesThisWeek.length}/7 วัน)
+        </div>
+        <div style="font-size: 0.825rem; color: var(--text-muted);">
+          เป้าหมายรางวัลถัดไป (ครบ ${nextMilestoneDay} วัน${daysRemainingForReward > 0 ? ` · อีก ${daysRemainingForReward} วัน` : ' · ครบแล้ว!'}): <strong style="color: ${currentWeekReward.color};">${currentWeekReward.frameName}</strong> + ฉายา <strong>"${currentWeekReward.title}"</strong>
+        </div>
+      </div>
+
+      <div class="checkin-days-grid">
+        ${daysHtml}
+      </div>
+
+      <div style="text-align: center; margin-top: 1.25rem; display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap;">
+        <button type="button" class="btn ${checkedInToday ? 'btn-outline' : 'btn-primary'} btn-lg" 
+                onclick="handleDailyCheckIn()" ${checkedInToday ? 'disabled' : ''}>
+          ${checkedInToday 
+            ? `✅ วันนี้คุณจุดไฟสตรีคแล้ว 🔥 ${currentStreak} วัน (กลับมาเช็กอินใหม่พรุ่งนี้นะครับ!)` 
+            : `🎁 กดเช็กอินวันนี้ (${THAI_WEEKDAYS_SUN_START[weekInfo.todayDow].fullName}) — ต่อไฟสู่ 🔥 ${currentStreak + 1} วัน`}
+        </button>
+        <button type="button" class="btn btn-outline btn-lg" onclick="switchCheckinSubTab('closet')">
+          🖼️ เปิดตู้เสื้อผ้าเลือกกรอบรูป (${PROFILE_FRAMES.length} แบบ)
+        </button>
+      </div>
+    </div>
+
+    <!-- SUB-TAB 2: Profile Frames Closet Showcase -->
+    <div class="frames-closet-container" style="display: ${!isCalendarTab ? 'block' : 'none'}; border-top: none; padding-top: 0; margin-top: 0;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
         <div>
           <h4 style="font-size: 1.15rem;">🖼️ ตู้เสื้อผ้ากรอบรูปโปรไฟล์และฉายา (Profile Frames & Titles)</h4>
-          <p style="font-size: 0.85rem; color: var(--text-muted);">สมาชิกใหม่เริ่มต้นที่กรอบพื้นฐาน และปลดล็อกกรอบสีสะท้อนแสงพรีเมียมได้จากการล็อกอินครบ 7 วันในแต่ละสัปดาห์ ${isAdminUser ? '<strong style="color: #eab308;">(👑 คุณเป็นแอดมิน: สามารถสวมใส่ได้ทุกกรอบทันที)</strong>' : ''}</p>
+          <p style="font-size: 0.85rem; color: var(--text-muted);">สมาชิกใหม่มีกรอบต้นอ่อนและเหมียวชานมไข่มุกให้ใช้ทันที และปลดล็อกกรอบพรีเมียมเพิ่มได้จากการเช็กอินและเขียนรีวิว ${isAdminUser ? '<strong style="color: #eab308;">(👑 คุณเป็นแอดมิน: สามารถสวมใส่ได้ทุกกรอบทันที)</strong>' : ''}</p>
         </div>
         <button type="button" class="btn btn-sm btn-outline" onclick="openProfileModal()">
-          👤 ไปที่โปรไฟล์เพื่อเลือกกรอบ
+          👤 ไปที่โปรไฟล์เพื่อเลือกฉายา
         </button>
       </div>
 
       <div class="frames-closet-grid">
         ${PROFILE_FRAMES.map(f => {
-          const isUnlocked = isAdminUser || (user && (user.unlockedFrames || ["frame-none"]).includes(f.id));
+          const isUnlocked = isUserFrameUnlocked(user, f.id);
           const isEquipped = user && (user.equippedFrame || "frame-none") === f.id;
           return `
             <div class="frame-closet-card ${isEquipped ? 'equipped' : ''}">
-              <img src="${user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}" class="user-avatar ${f.id}" style="width: 52px; height: 52px; border-radius: 50%;">
-              <div style="font-weight: 700; font-size: 0.9rem;">${f.name}</div>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">${f.desc}</div>
-              <div style="margin-top: 0.25rem;">
+              <div style="margin: 0.35rem 0 0.45rem 0;">
+                ${renderFramedAvatar(user?.avatar, f.id, 66, '', f.name)}
+              </div>
+              <div style="font-weight: 700; font-size: 0.92rem;">${f.icon || '🖼️'} ${f.name}</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">${f.desc}</div>
+              <div style="margin-top: 0.35rem;">
                 ${isEquipped 
                   ? '<span style="font-size: 0.75rem; color: #10b981; font-weight: 700;">✅ กำลังสวมใส่</span>' 
                   : (isUnlocked 
@@ -2160,124 +2819,173 @@ function renderDailyCheckIn() {
   `;
 }
 
-function handleDailyCheckIn() {
-  if (!requireAuth("เช็กอินรายสัปดาห์")) return;
+function isUserFrameUnlocked(user, frameId) {
+  if (!user) return frameId === 'frame-none' || frameId === 'frame-boba-cat';
+  if (user.role === 'admin') return true;
+  if (frameId === 'frame-none' || frameId === 'frame-boba-cat') return true;
+  const streak = Number(user.checkInStreak || user.streak || 0);
+  if (frameId === 'frame-strawberry-cake' && streak >= 3) return true;
+  if (frameId === 'frame-shiba-chef' && streak >= 5) return true;
+  return Array.isArray(user.unlockedFrames) && user.unlockedFrames.includes(frameId);
+}
 
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const currentUser = getCurrentUser();
-  const user = users.find(u => u.id === currentUser.id);
+async function handleDailyCheckIn() {
+  if (!requireAuth("เช็กอินรายวัน")) return;
+  if (!window.FirestoreService?.isConfigured()) {
+    showToast('⚠️ กรุณาเชื่อมต่อ firebaseConfig ใน js/firebase-config.js ก่อนเช็กอิน', 'warning');
+    return;
+  }
+
+  const user = getCurrentUser();
   if (!user) return;
+  const uid = user.uid || user.id;
+  const weekInfo = getCurrentCheckInWeekInfo();
+  const todayStr = weekInfo.todayStr;
 
-  const todayStr = getTodayDateString();
-
-  // Strict check-in verification across logins/logouts
   if (hasUserCheckedInToday(user)) {
     showToast("วันนี้คุณได้ทำการล็อกอิน/เช็กอินประจำวันเรียบร้อยแล้ว! กลับมาใหม่ในวันพรุ่งนี้นะครับ 🎉", "info");
     return;
   }
 
-  // Calculate continuous streak (เลขไฟเพิ่มขึ้นเรื่อยๆ)
-  let newStreak = 1;
-  if (user.lastCheckInDate) {
-    const lastDate = new Date(user.lastCheckInDate);
-    const todayDate = new Date(todayStr);
-    const diffDays = Math.round((todayDate - lastDate) / (1000 * 60 * 60 * 24));
-    if (diffDays === 1) {
-      // Consecutive check-in: streak climbs continuously (1, 2, 3, ... 7, 8, ... 14, ... 56+)
-      newStreak = (user.checkInStreak || 0) + 1;
-    } else if (diffDays === 0) {
-      newStreak = user.checkInStreak || 1;
-    } else {
-      // Missed streak: restart from 1
-      newStreak = 1;
+  try {
+    const alreadyInCloud = await window.FirestoreService.hasCheckedInToday(uid, todayStr);
+    if (alreadyInCloud) {
+      const updatedWeekDates = Array.from(new Set([...getCurrentWeekCheckedDates(user, weekInfo), todayStr])).sort();
+      user.lastCheckInDate = todayStr;
+      user.weeklyCheckInWeekKey = weekInfo.weekKey;
+      user.weeklyCheckInDates = updatedWeekDates;
+      AppState.checkedInTodayDate = todayStr;
+      renderDailyCheckIn();
+  scheduleMidnightCheckInRefresh();
+      showToast("วันนี้คุณได้เช็กอินลง Cloud Firestore เรียบร้อยแล้ว 🎉", "info");
+      return;
     }
-  } else {
-    newStreak = (user.checkInStreak || 0) + 1;
-  }
 
-  user.lastCheckInDate = todayStr;
-  user.checkInStreak = newStreak;
+    // เก็บเลขไฟสะสมต่อเนื่องไปเรื่อย ๆ ไม่รีเซ็ตเมื่อขึ้นสัปดาห์ใหม่คืนวันเสาร์ 00:00 น.
+    const diffDays = calcDateDiffDays(user.lastCheckInDate, todayStr);
+    const currentCount = Number(user.checkInStreak ?? user.streak ?? 0);
+    const newStreak = diffDays === 0 ? Math.max(1, currentCount) : (currentCount + 1);
+    const updatedWeekDates = Array.from(new Set([...getCurrentWeekCheckedDates(user, weekInfo), todayStr])).sort();
 
-  // Persist lock keys in localStorage to prevent repeated check-in across logouts/logins
-  localStorage.setItem(`spu_last_checkin_${user.id}`, todayStr);
-  if (user.email) {
-    localStorage.setItem(`spu_last_checkin_email_${user.email.toLowerCase()}`, todayStr);
-  }
-
-  if (!user.unlockedFrames) user.unlockedFrames = ["frame-none"];
-  if (!user.unlockedTitles) user.unlockedTitles = ["นักชิมมือใหม่"];
-
-  let rewardMsg = "";
-  // Check if Day 7 grand reward of any week (every multiple of 7: 7, 14, 21, 28, 35, 42, 49, 56, etc.)
-  if (newStreak % 7 === 0) {
-    const weekNum = Math.floor(newStreak / 7);
-    const rewardIndex = Math.min(weekNum - 1, WEEKLY_REWARDS_CALENDAR.length - 1);
-    const calendarReward = WEEKLY_REWARDS_CALENDAR[rewardIndex];
-
-    if (calendarReward) {
-      if (!user.unlockedFrames.includes(calendarReward.frameId)) {
-        user.unlockedFrames.push(calendarReward.frameId);
-      }
-      user.equippedFrame = calendarReward.frameId;
-      user.customTitle = calendarReward.title;
-      if (!user.unlockedTitles.includes(calendarReward.title)) {
-        user.unlockedTitles.push(calendarReward.title);
-      }
-      rewardMsg = ` 👑 ยินดีด้วยอย่างยิ่ง! สตรีคสะสมต่อเนื่องครบ ${newStreak} วัน (สัปดาห์ที่ ${weekNum}) ได้รับรางวัลใหญ่ [${calendarReward.frameName}] และฉายาสุดเท่ [${calendarReward.title}]!`;
+    const unlockedFrames = Array.from(new Set([...(user.unlockedFrames || ["frame-none"]), "frame-none", "frame-boba-cat"]));
+    if (newStreak >= 3 && !unlockedFrames.includes("frame-strawberry-cake")) {
+      unlockedFrames.push("frame-strawberry-cake");
     }
-  } else {
-    const dayInWeek = ((newStreak - 1) % 7) + 1;
+    if (newStreak >= 5 && !unlockedFrames.includes("frame-shiba-chef")) {
+      unlockedFrames.push("frame-shiba-chef");
+    }
+    const unlockedTitles = [...(user.unlockedTitles || ["นักชิมมือใหม่"])];
+    const badges = [...(user.badges || ["newbie"])];
+    let equippedFrame = user.equippedFrame || "frame-none";
+    let customTitle = user.customTitle || "นักชิมมือใหม่";
+
     const currentWeek = Math.floor((newStreak - 1) / 7) + 1;
-    rewardMsg = ` สะสมสตรีคต่อเนื่องวันที่ ${newStreak} (วันที่ ${dayInWeek}/7 ของสัปดาห์ที่ ${currentWeek}) ล็อกอินต่อเนื่องให้ครบ 7 วันเพื่อรับรางวัลใหญ่ประจำสัปดาห์!`;
+    let rewardMsg = "";
+
+    if (newStreak % 7 === 0) {
+      const weekNum = Math.floor(newStreak / 7);
+      const rewardIndex = Math.min(weekNum - 1, WEEKLY_REWARDS_CALENDAR.length - 1);
+      const calendarReward = WEEKLY_REWARDS_CALENDAR[rewardIndex];
+
+      if (calendarReward) {
+        if (!unlockedFrames.includes(calendarReward.frameId)) {
+          unlockedFrames.push(calendarReward.frameId);
+        }
+        equippedFrame = calendarReward.frameId;
+        customTitle = calendarReward.title;
+        if (!unlockedTitles.includes(calendarReward.title)) {
+          unlockedTitles.push(calendarReward.title);
+        }
+        rewardMsg = ` 👑 ยินดีด้วยอย่างยิ่ง! ไฟสะสมต่อเนื่องครบ ${newStreak} วัน ได้รับรางวัลใหญ่ [${calendarReward.frameName}] และฉายาสุดเท่ [${calendarReward.title}]!`;
+      }
+    } else {
+      rewardMsg = ` สัปดาห์นี้เช็กอินแล้ว ${updatedWeekDates.length}/7 วัน · ไฟสะสมต่อเนื่อง ${newStreak} วัน!`;
+    }
+
+    // Check streak badges
+    BADGES_LIST.forEach(b => {
+      if (!badges.includes(b.id) && b.reqType === 'streak' && newStreak >= (b.minStreak || 0)) {
+        badges.push(b.id);
+        showToast(`🏆 ยินดีด้วย! ปลดล็อกบัดจ์ใหม่: "${b.name}" ${b.icon}`, 'success');
+      }
+    });
+
+    const userUpdatePayload = {
+      lastCheckInDate: todayStr,
+      weeklyCheckInWeekKey: weekInfo.weekKey,
+      weeklyCheckInDates: updatedWeekDates,
+      streak: newStreak,
+      checkInStreak: newStreak,
+      unlockedFrames,
+      equippedFrame,
+      customTitle,
+      unlockedTitles,
+      badges
+    };
+
+    await window.FirestoreService.recordDailyCheckin({
+      uid,
+      dateStr: todayStr,
+      checkinPayload: {
+        uid,
+        date: todayStr,
+        weekKey: weekInfo.weekKey,
+        dayOfWeek: weekInfo.todayDow,
+        streakCount: newStreak,
+        weekNum: currentWeek
+      },
+      userUpdatePayload
+    });
+
+    Object.assign(user, userUpdatePayload);
+    AppState.checkedInTodayDate = todayStr;
+    setCurrentUser(user);
+
+    SoundFX.playWin();
+    showToast(`🎉 เช็กอินสะสมสตรีคสำเร็จ! 🔥 เลขไฟสะสม: ${newStreak} วัน${rewardMsg}`, 'success');
+    renderBadgesShowcase();
+  } catch (err) {
+    console.error('Check-in error:', err);
+    showToast('บันทึกการเช็กอินลง Firestore ไม่สำเร็จ: ' + (err?.message || ''), 'error');
   }
-
-  // Check badges for streak milestone (e.g. canteen_hero on day 7)
-  checkAndAwardBadges(user.id);
-
-  // Save changes
-  Store.set(STORAGE_KEYS.USERS, users);
-  setCurrentUser(user);
-
-  SoundFX.playWin();
-  showToast(`🎉 เช็กอินสะสมสตรีคสำเร็จ! 🔥 เลขไฟสะสม: ${newStreak} วัน${rewardMsg}`, 'success');
-
-  renderDailyCheckIn();
-  renderLeaderboard();
-  renderNavUser();
 }
 
-function equipProfileFrame(frameId) {
+async function equipProfileFrame(frameId) {
   if (!requireAuth("สวมใส่กรอบโปรไฟล์")) return;
 
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const currentUser = getCurrentUser();
-  const user = users.find(u => u.id === currentUser.id);
+  const user = getCurrentUser();
   if (!user) return;
-
+  const uid = user.uid || user.id;
   const isAdminUser = user.role === 'admin';
 
-  if (!isAdminUser && (!user.unlockedFrames || !user.unlockedFrames.includes(frameId))) {
-    showToast("กรอบนี้ยังไม่ได้ปลดล็อก กรุณาเช็กอินสะสมเพื่อปลดล็อกก่อน", "error");
+  if (!isUserFrameUnlocked(user, frameId)) {
+    showToast("กรอบนี้ยังไม่ได้ปลดล็อก กรุณาเช็กอินสะสมหรือเขียนรีวิวเพื่อปลดล็อกก่อน", "error");
     return;
   }
 
-  if (isAdminUser) {
-    if (!user.unlockedFrames) user.unlockedFrames = [];
-    if (!user.unlockedFrames.includes(frameId)) user.unlockedFrames.push(frameId);
-  }
+  const nextFrames = Array.from(new Set([...(user.unlockedFrames || ["frame-none"]), "frame-none", "frame-boba-cat", frameId]));
 
-  user.equippedFrame = frameId;
-  Store.set(STORAGE_KEYS.USERS, users);
-  setCurrentUser(user);
+  try {
+    if (window.AuthService?.isConfigured()) {
+      await window.AuthService.updateOwnProfile(uid, {
+        equippedFrame: frameId,
+        unlockedFrames: nextFrames
+      });
+    }
+    user.equippedFrame = frameId;
+    user.unlockedFrames = nextFrames;
+    setCurrentUser(user);
 
-  SoundFX.playMatch();
-  showToast(isAdminUser ? "👑 สวมใส่กรอบรูปโปรไฟล์สำเร็จด้วยสิทธิ์ผู้ดูแลระบบ (Admin)!" : "เปลี่ยนกรอบรูปโปรไฟล์เรียบร้อยแล้ว!", "success");
+    SoundFX.playMatch();
+    showToast(isAdminUser ? "👑 สวมใส่กรอบรูปโปรไฟล์สำเร็จด้วยสิทธิ์ผู้ดูแลระบบ (Admin)!" : "เปลี่ยนกรอบรูปโปรไฟล์เรียบร้อยแล้ว!", "success");
 
-  renderNavUser();
-  renderDailyCheckIn();
-  const profileModal = document.getElementById('profileModal');
-  if (profileModal && profileModal.classList.contains('active')) {
-    openProfileModal();
+    const profileModal = document.getElementById('profileModal');
+    if (profileModal && profileModal.classList.contains('active')) {
+      openProfileModal();
+    }
+  } catch (err) {
+    console.error('Equip frame error:', err);
+    showToast('เปลี่ยนกรอบรูปโปรไฟล์ไม่สำเร็จ', 'error');
   }
 }
 
@@ -2289,58 +2997,160 @@ function renderNewsGrid() {
   const grid = document.getElementById('newsGrid');
   if (!grid) return;
 
-  const newsList = Store.get(STORAGE_KEYS.NEWS, INITIAL_NEWS);
+  const newsList = AppState.news;
+
+  if (window.FirestoreService?.isConfigured() && !AppState.newsLoaded && newsList.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column: 1 / -1; padding: 2rem; text-align: center; color: var(--text-muted); border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface);">
+        🔄 กำลังโหลดข่าวสารจาก Cloud Firestore...
+      </div>
+    `;
+    return;
+  }
+
+  if (!newsList || newsList.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column: 1 / -1; padding: 2.5rem 1.5rem; text-align: center; color: var(--text-muted); border: 1px dashed var(--border-color); border-radius: var(--radius-lg); background: var(--bg-surface);">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📢</div>
+        <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-main); margin-bottom: 0.35rem;">ยังไม่มีข่าวสารหรือโปรโมชั่นในขณะนี้</div>
+        <div style="font-size: 0.9rem;">รอติดตามโปรโมชั่นและข่าวประกาศอร่อยๆ จากชมรมและโรงอาหาร SPU เร็วๆ นี้</div>
+        ${isAdmin() ? `
+          <button type="button" class="btn btn-primary btn-sm" style="margin-top: 1rem;" onclick="openAddNewsModal()">
+            ➕ เพิ่มข่าวสารแรก
+          </button>
+        ` : ''}
+      </div>
+    `;
+    return;
+  }
 
   grid.innerHTML = newsList.map(item => `
     <div class="news-card">
-      <img src="${item.image}" alt="${item.title}" class="news-img" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500'">
+      <img src="${item.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500'}" alt="${item.title}" class="news-img" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500'">
       <div class="news-body">
         <span class="news-tag">${item.tag}</span>
         <h3 class="news-title">${item.title}</h3>
         <p class="news-desc">${item.content}</p>
-        <div class="news-date">📅 ${item.date}</div>
+        <div class="news-date">📅 ${formatFirebaseDate(item.createdAt, item.date)}</div>
       </div>
     </div>
   `).join('');
 }
 
+let newsFormUploadedImage = '';
+
+function updateNewsImagePreview(src) {
+  const previewContainer = document.getElementById('newsImagePreviewContainer');
+  const previewImg = document.getElementById('newsImagePreviewImg');
+  if (!previewContainer || !previewImg) return;
+  if (src) {
+    previewImg.src = src;
+    previewContainer.style.display = 'block';
+  } else {
+    previewImg.src = '';
+    previewContainer.style.display = 'none';
+  }
+}
+
+async function handleNewsImageFileUpload(event) {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showToast('กรุณาเลือกไฟล์รูปภาพเท่านั้น (PNG, JPG, WebP, GIF)', 'error');
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    showToast('ไฟล์รูปภาพมีขนาดใหญ่เกินไป (กรุณาเลือกรูปไม่เกิน 8MB)', 'error');
+    return;
+  }
+  try {
+    const compressedDataUrl = await compressImageFile(file, 900, 650, 0.80);
+    if (compressedDataUrl) {
+      newsFormUploadedImage = compressedDataUrl;
+      const urlInput = document.getElementById('newsImage');
+      if (urlInput) urlInput.value = '';
+      updateNewsImagePreview(compressedDataUrl);
+      showToast('แนบรูปภาพข่าวจากเครื่องเรียบร้อยแล้ว 📷', 'success');
+    }
+  } catch (err) {
+    console.error('Compress news image error:', err);
+    showToast('ไม่สามารถอ่านไฟล์รูปภาพได้', 'error');
+  } finally {
+    if (event.target) event.target.value = '';
+  }
+}
+
+function handleNewsImageUrlInput(val) {
+  const trimmed = (val || '').trim();
+  if (trimmed) {
+    newsFormUploadedImage = '';
+    updateNewsImagePreview(trimmed);
+  } else if (!newsFormUploadedImage) {
+    updateNewsImagePreview('');
+  }
+}
+
+function clearNewsFormImage() {
+  newsFormUploadedImage = '';
+  const fileInput = document.getElementById('newsImageFileInput');
+  if (fileInput) fileInput.value = '';
+  const urlInput = document.getElementById('newsImage');
+  if (urlInput) urlInput.value = '';
+  updateNewsImagePreview('');
+}
+
 function openAddNewsModal() {
   if (!isAdmin()) {
     showToast('ฟีเจอร์นี้สงวนไว้สำหรับผู้ดูแลระบบ (Admin) เท่านั้น', 'error');
-    openAuthModal();
+    openAdminAccessModal();
     return;
   }
+  const title = document.getElementById('newsTitle');
+  const tag = document.getElementById('newsTag');
+  const content = document.getElementById('newsContent');
+  if (title) title.value = '';
+  if (tag) tag.value = '';
+  if (content) content.value = '';
+  clearNewsFormImage();
   openModal('newsFormModal');
 }
 
-function handleNewsSubmit(event) {
+async function handleNewsSubmit(event) {
   event.preventDefault();
   if (!isAdmin()) return;
 
-  const title = document.getElementById('newsTitle').value.trim();
-  const tag = document.getElementById('newsTag').value.trim();
-  const content = document.getElementById('newsContent').value.trim();
-  const image = document.getElementById('newsImage').value.trim();
-
-  const newsList = Store.get(STORAGE_KEYS.NEWS, INITIAL_NEWS);
+  const title = (document.getElementById('newsTitle')?.value || '').trim() || 'ข่าวประชาสัมพันธ์ SPU';
+  const tag = (document.getElementById('newsTag')?.value || '').trim() || 'ข่าวสาร';
+  const content = (document.getElementById('newsContent')?.value || '').trim() || '';
+  const urlImage = (document.getElementById('newsImage')?.value || '').trim();
+  const image = newsFormUploadedImage || urlImage;
   const nowStr = new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  const newItem = {
-    id: `news_${Date.now()}`,
+  const newNewsItem = {
     title,
     tag,
     content,
-    image,
+    image: image || '',
     date: nowStr,
     active: true
   };
 
-  newsList.unshift(newItem);
-  Store.set(STORAGE_KEYS.NEWS, newsList);
-  closeModal('newsFormModal');
-  showToast('เผยแพร่ข่าวสารเรียบร้อยแล้ว!', 'success');
-  renderNewsGrid();
-  renderAdminNews();
+  try {
+    if (window.FirestoreService?.isConfigured()) {
+      await window.FirestoreService.addNews(newNewsItem);
+    } else {
+      AppState.news.unshift({ id: 'news_' + Date.now(), ...newNewsItem });
+      renderNewsGrid();
+      renderAdminNews();
+    }
+    event.target?.reset?.();
+    clearNewsFormImage();
+    closeModal('newsFormModal');
+    showToast('เผยแพร่ข่าวสารเรียบร้อยแล้ว!', 'success');
+  } catch (err) {
+    console.error('Add news error:', err);
+    showToast('เผยแพร่ข่าวสารไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
 }
 
 // ============================================================================
@@ -2352,21 +3162,32 @@ function triggerProfilePhotoUpload() {
   if (fileInput) fileInput.click();
 }
 
-function handleProfilePhotoUpload(event) {
-  const file = event.target.files && event.target.files[0];
+async function handleProfilePhotoUpload(event) {
+  const file = event.target?.files?.[0];
   if (!file) return;
 
-  if (file.size > 3 * 1024 * 1024) {
-    showToast("ไฟล์รูปภาพมีขนาดใหญ่เกินไป (กรุณาเลือกรูปขนาดไม่เกิน 3MB)", "error");
+  if (!file.type.startsWith('image/')) {
+    showToast("กรุณาเลือกไฟล์รูปภาพเท่านั้น (JPG, PNG, WebP)", "error");
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const base64Url = e.target.result;
-    saveUserProfileAvatar(base64Url);
-  };
-  reader.readAsDataURL(file);
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("ไฟล์รูปภาพมีขนาดใหญ่เกินไป (กรุณาเลือกรูปขนาดไม่เกิน 5MB)", "error");
+    return;
+  }
+
+  showToast('กำลังย่อขนาดและบันทึกรูปโปรไฟล์...', 'info');
+  try {
+    const compressed = await compressImageFile(file, 300, 300, 0.75);
+    if (compressed) {
+      await saveUserProfileAvatar(compressed);
+    }
+  } catch (err) {
+    console.error('Avatar upload error:', err);
+    showToast('อัปโหลดรูปโปรไฟล์ไม่สำเร็จ', 'error');
+  } finally {
+    event.target.value = '';
+  }
 }
 
 function promptProfilePhotoUrl() {
@@ -2377,23 +3198,25 @@ function promptProfilePhotoUrl() {
   }
 }
 
-function saveUserProfileAvatar(imageUrl) {
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const currentUser = getCurrentUser();
-  const user = users.find(u => u.id === currentUser.id);
+async function saveUserProfileAvatar(imageUrl) {
+  const user = getCurrentUser();
   if (!user) return;
+  const uid = user.uid || user.id;
 
-  user.avatar = imageUrl;
-  Store.set(STORAGE_KEYS.USERS, users);
-  setCurrentUser(user);
+  try {
+    if (window.AuthService?.isConfigured()) {
+      await window.AuthService.updateOwnProfile(uid, { avatar: imageUrl });
+    }
+    user.avatar = imageUrl;
+    setCurrentUser(user);
 
-  SoundFX.playMatch();
-  showToast("อัปเดตรูปโปรไฟล์ของคุณเรียบร้อยแล้ว! 📸", "success");
-
-  renderNavUser();
-  renderDailyCheckIn();
-  renderLeaderboard();
-  openProfileModal();
+    SoundFX.playMatch();
+    showToast("อัปเดตรูปโปรไฟล์ของคุณเรียบร้อยแล้ว! 📸", "success");
+    openProfileModal();
+  } catch (err) {
+    console.error('Save avatar error:', err);
+    showToast('อัปเดตรูปโปรไฟล์ไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
 }
 
 function openProfileModal() {
@@ -2406,9 +3229,10 @@ function openProfileModal() {
   const body = document.getElementById('profileModalBody');
   if (!body) return;
 
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
+  const uid = user.uid || user.id;
+  const restaurants = AppState.restaurants;
   const userFavs = restaurants.filter(r => (user.favorites || []).includes(r.id));
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS).filter(r => r.userId === user.id);
+  const reviews = AppState.reviews.filter(r => r.userId === uid);
   const isAdminUser = user.role === 'admin';
   const userUnlockedFrames = isAdminUser ? PROFILE_FRAMES.map(f => f.id) : (user.unlockedFrames || ["frame-none"]);
   const allAvailableTitles = isAdminUser
@@ -2424,13 +3248,13 @@ function openProfileModal() {
 
   body.innerHTML = `
     <div style="display: flex; align-items: center; gap: 1.5rem; padding-bottom: 1.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1.5rem; flex-wrap: wrap;">
-      <div style="position: relative; display: inline-block;">
-        <img src="${user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}" class="user-avatar ${user.equippedFrame || ''}" style="width: 86px; height: 86px; border-radius: 50%; object-fit: cover;">
+      <div style="position: relative; display: inline-block; margin: 0.4rem;">
+        ${renderFramedAvatar(user.avatar, user.equippedFrame || 'frame-none', 86, '', user.name)}
       </div>
       <div style="flex-grow: 1;">
         <h3 style="font-size: 1.4rem; margin-bottom: 0.25rem;">${user.name}</h3>
         <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.35rem;">
-          📧 ${user.email} | สถานะ: <span style="color: var(--primary); font-weight: 700;">${user.userType || 'นักศึกษา'}</span> (${user.role === 'admin' ? '👑 ผู้ดูแลระบบ (Admin)' : user.role})
+          📧 ${user.email} | สถานะ: <span style="color: var(--primary); font-weight: 700;">${user.userType || 'นักศึกษา'}</span> (${user.role === 'admin' ? '👑 ผู้ดูแลระบบ (Admin)' : '🎓 สมาชิกจานเด็ด SPU'})
         </div>
         <div style="font-size: 0.85rem; color: var(--primary); font-weight: 700; margin-bottom: 0.5rem;">
           🎖️ ฉายาปัจจุบัน: ${user.customTitle || 'นักชิมมือใหม่'} | 🔥 สตรีคเช็กอิน: ${user.checkInStreak || 0} วัน
@@ -2448,13 +3272,20 @@ function openProfileModal() {
         </div>
 
         <!-- Custom Title Selector -->
-        <div style="margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <div style="margin-bottom: 0.65rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">เลือกสวมใส่ฉายา:</span>
           <select class="form-control" style="width: auto; padding: 0.25rem 0.65rem; font-size: 0.85rem;" onchange="setUserActiveTitle(this.value)">
             ${allAvailableTitles.map(t => `
               <option value="${t}" ${user.customTitle === t ? 'selected' : ''}>🎖️ ${t} ${isAdminUser ? '👑' : ''}</option>
             `).join('')}
           </select>
+        </div>
+
+        <!-- Inline Faculty Text Input -->
+        <div style="margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+          <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">🏛️ คณะ / สำนักวิชา:</span>
+          <input type="text" id="profileEditFacultyInput" class="form-control" value="${(user.faculty || '').replace(/"/g, '&quot;')}" placeholder="พิมพ์ชื่อคณะหรือสำนักวิชา..." style="width: 220px; padding: 0.25rem 0.65rem; font-size: 0.85rem;">
+          <button type="button" class="btn btn-sm btn-outline" onclick="saveUserOwnFaculty()">💾 บันทึกคณะ</button>
         </div>
 
         <!-- Photo Upload Controls -->
@@ -2520,13 +3351,15 @@ function openProfileModal() {
       </div>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
         ${PROFILE_FRAMES.map(f => {
-          const isUnlocked = isAdminUser || userUnlockedFrames.includes(f.id);
+          const isUnlocked = isUserFrameUnlocked(user, f.id);
           const isEquipped = (user.equippedFrame || 'frame-none') === f.id;
           return `
-            <div style="background: var(--bg-surface-alt); border: 2px solid ${isEquipped ? 'var(--primary)' : 'var(--border-color)'}; padding: 1rem; border-radius: var(--radius-lg); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.4rem;">
-              <img src="${user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}" class="user-avatar ${f.id}" style="width: 52px; height: 52px; border-radius: 50%; margin-bottom: 0.25rem;">
-              <div style="font-weight: 700; font-size: 0.875rem;">${f.name}</div>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">${f.desc}</div>
+            <div style="background: var(--bg-surface-alt); border: 2px solid ${isEquipped ? 'var(--primary)' : 'var(--border-color)'}; padding: 1rem; border-radius: var(--radius-lg); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.45rem;">
+              <div style="margin: 0.3rem 0;">
+                ${renderFramedAvatar(user.avatar, f.id, 66, '', f.name)}
+              </div>
+              <div style="font-weight: 700; font-size: 0.875rem;">${f.icon || '🖼️'} ${f.name}</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">${f.desc}</div>
               <div style="margin-top: 0.5rem;">
                 ${isEquipped 
                   ? '<span style="font-size: 0.8rem; color: #10b981; font-weight: 800;">✅ กำลังสวมใส่</span>' 
@@ -2545,20 +3378,47 @@ function openProfileModal() {
   openModal('profileModal');
 }
 
-function setUserActiveTitle(title) {
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const currentUser = getCurrentUser();
-  const user = users.find(u => u.id === currentUser.id);
+async function setUserActiveTitle(title) {
+  const user = getCurrentUser();
   if (!user) return;
+  const uid = user.uid || user.id;
 
-  user.customTitle = title;
-  Store.set(STORAGE_KEYS.USERS, users);
-  setCurrentUser(user);
+  try {
+    if (window.AuthService?.isConfigured()) {
+      await window.AuthService.updateOwnProfile(uid, { customTitle: title });
+    }
+    user.customTitle = title;
+    setCurrentUser(user);
+    showToast(`เปลี่ยนฉายาเป็น "${title}" เรียบร้อยแล้ว! ✨`, "success");
+    openProfileModal();
+  } catch (err) {
+    console.error('Update title error:', err);
+    showToast('เปลี่ยนฉายาไม่สำเร็จ', 'error');
+  }
+}
 
-  showToast(`เปลี่ยนฉายาเป็น "${title}" เรียบร้อยแล้ว! ✨`, "success");
-  renderNavUser();
-  renderLeaderboard();
-  openProfileModal();
+async function saveUserOwnFaculty() {
+  const user = getCurrentUser();
+  if (!user) return;
+  const uid = user.uid || user.id;
+  const facultyVal = (document.getElementById('profileEditFacultyInput')?.value || '').trim();
+  if (!facultyVal) {
+    showToast('กรุณาพิมพ์ชื่อคณะหรือสำนักวิชาก่อนบันทึก', 'error');
+    return;
+  }
+
+  try {
+    if (window.AuthService?.isConfigured()) {
+      await window.AuthService.updateOwnProfile(uid, { faculty: facultyVal });
+    }
+    user.faculty = facultyVal;
+    setCurrentUser(user);
+    showToast(`บันทึกคณะ/สำนักวิชา "${facultyVal}" เรียบร้อยแล้ว! 🏛️`, 'success');
+    openProfileModal();
+  } catch (err) {
+    console.error('Update faculty error:', err);
+    showToast('บันทึกคณะไม่สำเร็จ', 'error');
+  }
 }
 
 function switchProfileTab(tabId, btn) {
@@ -2573,6 +3433,37 @@ function switchProfileTab(tabId, btn) {
 // 14. Comprehensive Admin Dashboard Engine
 // ============================================================================
 
+function renderFirebaseStatusBox() {
+  const box = document.getElementById('firebaseStatusBox');
+  if (!box) return;
+
+  const isConfigured = window.AuthService?.isConfigured();
+  const projectId = window.FIREBASE_CONFIG?.projectId || '-';
+
+  if (isConfigured) {
+    box.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+          <div style="font-weight: 800; color: #047857; font-size: 1rem;">🟢 เชื่อมต่อ Firebase สำเร็จแล้ว!</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+            Project ID: <code>${projectId}</code> | Cloud Firestore Real-time Sync Active
+          </div>
+        </div>
+        <span style="background: #d1fae5; color: #065f46; font-size: 0.78rem; font-weight: 700; padding: 0.35rem 0.75rem; border-radius: var(--radius-full);">
+          GitHub Pages Ready
+        </span>
+      </div>
+    `;
+  } else {
+    box.innerHTML = `
+      <div style="font-weight: 800; color: #b45309; font-size: 1rem;">⚠️ ยังไม่ได้ตั้งค่า firebaseConfig ในไฟล์ js/firebase-config.js</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.35rem 0 0 0;">
+        กรุณานำค่า <code>firebaseConfig</code> จาก Firebase Console มาใส่ใน <code>js/firebase-config.js</code> เพื่อเปิดใช้งานระบบฐานข้อมูลและล็อกอิน
+      </p>
+    `;
+  }
+}
+
 function openAdminModal() {
   if (!isAdmin()) {
     openAdminAccessModal();
@@ -2586,6 +3477,7 @@ function openAdminModal() {
   renderAdminNews();
   renderAdminThemePicker();
   populateAdminSiteTexts();
+  renderFirebaseStatusBox();
   openModal('adminModal');
 }
 
@@ -2601,10 +3493,9 @@ function renderAdminStats() {
   const container = document.getElementById('adminStatsGrid');
   if (!container) return;
 
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-  const news = Store.get(STORAGE_KEYS.NEWS, INITIAL_NEWS);
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
+  const restaurants = AppState.restaurants;
+  const reviews = AppState.reviews;
+  const users = AppState.users;
   const analytics = getAnalytics();
   const reportedReviews = reviews.filter(r => r.reported);
 
@@ -2612,14 +3503,14 @@ function renderAdminStats() {
     <div class="stat-card">
       <div class="stat-icon" style="color: #0284c7; background: #e0f2fe;">👀</div>
       <div>
-        <div class="stat-val" style="color: #0369a1;">${(analytics.pageViews || 1).toLocaleString()}</div>
+        <div class="stat-val" style="color: #0369a1;">${Number(analytics.pageViews || 0).toLocaleString()}</div>
         <div class="stat-label">ยอดเข้าชมเว็บทั้งหมด (Page Views)</div>
       </div>
     </div>
     <div class="stat-card">
       <div class="stat-icon" style="color: #059669; background: #d1fae5;">👥</div>
       <div>
-        <div class="stat-val" style="color: #047857;">${(analytics.uniqueVisitors || 1).toLocaleString()}</div>
+        <div class="stat-val" style="color: #047857;">${Number(analytics.uniqueVisitors || 0).toLocaleString()}</div>
         <div class="stat-label">ผู้เข้าชมไม่ซ้ำ (Unique Visitors)</div>
       </div>
     </div>
@@ -2659,15 +3550,16 @@ function renderAdminUsers() {
   const statsRow = document.getElementById('adminUserStatsRow');
   if (!tbody) return;
 
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
+  const users = AppState.users;
   const roleFilter = document.getElementById('adminUserRoleFilter')?.value || 'all';
-  const facultyFilter = document.getElementById('adminUserFacultyFilter')?.value || 'all';
+  const facultyFilter = (document.getElementById('adminUserFacultyFilter')?.value || '').toLowerCase().trim();
   const searchQuery = (document.getElementById('adminUserSearch')?.value || '').toLowerCase().trim();
 
   // Filter
   const filtered = users.filter(u => {
-    const matchRole = roleFilter === 'all' || u.role === roleFilter;
-    const matchFaculty = facultyFilter === 'all' || (u.faculty && u.faculty.includes(facultyFilter));
+    const matchRole = roleFilter === 'all' || 
+      (roleFilter === 'admin' ? u.role === 'admin' : u.role !== 'admin');
+    const matchFaculty = !facultyFilter || facultyFilter === 'all' || (u.faculty && u.faculty.toLowerCase().includes(facultyFilter));
     const matchSearch = !searchQuery || 
       (u.name && u.name.toLowerCase().includes(searchQuery)) ||
       (u.studentId && u.studentId.toLowerCase().includes(searchQuery)) ||
@@ -2680,7 +3572,7 @@ function renderAdminUsers() {
   // Calculate user stats
   const totalUsers = users.length;
   const adminCount = users.filter(u => u.role === 'admin').length;
-  const studentCount = users.filter(u => u.userType === 'นักศึกษา').length;
+  const memberCount = users.filter(u => u.role !== 'admin').length;
   const totalStreaks = users.reduce((sum, u) => sum + (Number(u.checkInStreak) || 0), 0);
 
   if (statsRow) {
@@ -2694,8 +3586,8 @@ function renderAdminUsers() {
         <div style="font-size: 1.3rem; font-weight: 800; color: #7c3aed;">${adminCount} คน</div>
       </div>
       <div style="background: var(--bg-surface-alt); padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">นักศึกษา SPU</div>
-        <div style="font-size: 1.3rem; font-weight: 800; color: var(--primary);">${studentCount} คน</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">สมาชิกทั่วไป / นักศึกษา</div>
+        <div style="font-size: 1.3rem; font-weight: 800; color: var(--primary);">${memberCount} คน</div>
       </div>
       <div style="background: var(--bg-surface-alt); padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
         <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">สตรีคล็อกอินสะสมรวม</div>
@@ -2716,59 +3608,63 @@ function renderAdminUsers() {
   }
 
   const currentUser = getCurrentUser();
+  const currentUid = currentUser ? (currentUser.uid || currentUser.id) : null;
 
   tbody.innerHTML = filtered.map(u => {
-    const isSelf = currentUser && currentUser.id === u.id;
+    const uid = u.uid || u.id;
+    const isSelf = currentUid && currentUid === uid;
     const isAdminUser = u.role === 'admin';
     const roleBadge = isAdminUser
-      ? `<span style="background: #ede9fe; color: #6d28d9; padding: 0.2rem 0.5rem; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 700;">👑 Admin</span>`
-      : `<span style="background: var(--bg-surface-alt); color: var(--text-muted); padding: 0.2rem 0.5rem; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 600;">🎓 Member</span>`;
+      ? `<span style="display: inline-flex; align-items: center; gap: 0.28rem; white-space: nowrap; background: #ede9fe; color: #6d28d9; padding: 0.25rem 0.65rem; border-radius: var(--radius-full); font-size: 0.78rem; font-weight: 700;">👑 Admin</span>`
+      : `<span style="display: inline-flex; align-items: center; gap: 0.28rem; white-space: nowrap; background: var(--bg-surface-alt); border: 1px solid var(--border-color); color: var(--text-main); padding: 0.25rem 0.65rem; border-radius: var(--radius-full); font-size: 0.78rem; font-weight: 600;">🎓 Member</span>`;
 
-    const registerDate = u.createdAt || "01 พ.ย. 2026";
-    const studentId = u.studentId || '-';
+    const registerDate = u.createdAtDisplay || formatFirebaseDate(u.createdAt, '-');
+    const studentId = getEffectiveMemberId(u);
     const faculty = u.faculty || 'ม.ศรีปทุม';
     const phone = u.phone || '-';
 
     return `
       <tr>
-        <td>
-          <img src="${u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}" class="user-avatar ${u.equippedFrame || ''}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+        <td style="width: 52px;">
+          ${renderFramedAvatar(u.avatar, u.equippedFrame || 'frame-none', 38, '', u.name)}
         </td>
         <td>
-          <div style="font-weight: 700;">${u.name} ${isSelf ? '<span style="font-size: 0.7rem; color: var(--primary); font-weight: 700;">(คุณ)</span>' : ''}</div>
-          <div style="font-size: 0.75rem; color: var(--primary); font-family: monospace;">🆔 ${studentId}</div>
+          <div style="font-weight: 700; line-height: 1.3;">${u.name} ${isSelf ? '<span style="font-size: 0.72rem; color: var(--primary); font-weight: 700; white-space: nowrap;">(คุณ)</span>' : ''}</div>
+          <div style="font-size: 0.75rem; color: var(--primary); font-family: monospace; white-space: nowrap;">🆔 ${studentId}</div>
         </td>
         <td>
-          <div style="font-size: 0.85rem; font-weight: 600;">${faculty}</div>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">${u.status || 'อนุมัติแล้ว'}</div>
+          <div style="font-size: 0.84rem; font-weight: 600; line-height: 1.3;">${faculty}</div>
+          <div style="font-size: 0.74rem; color: var(--text-muted); white-space: nowrap;">${u.status || 'อนุมัติแล้ว'}</div>
         </td>
         <td>
-          <div style="font-family: monospace; font-size: 0.8rem;">✉️ ${u.email}</div>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">📞 ${phone}</div>
+          <div style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">✉️ ${u.email}</div>
+          <div style="font-size: 0.74rem; color: var(--text-muted); white-space: nowrap;">📞 ${phone}</div>
         </td>
-        <td><span style="font-size: 0.8rem; background: var(--bg-surface-alt); padding: 0.2rem 0.5rem; border-radius: 4px;">${u.userType || 'นักศึกษา'}</span></td>
-        <td>${roleBadge}</td>
-        <td>
-          <span style="font-weight: 700; color: var(--primary);">🔥 ${u.checkInStreak || 0}/7 วัน</span>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">🏷️ ${u.customTitle || 'นักชิมมือใหม่'}</div>
+        <td style="white-space: nowrap;">
+          <span style="display: inline-block; white-space: nowrap; font-size: 0.76rem; background: var(--bg-surface-alt); border: 1px solid var(--border-color); padding: 0.22rem 0.55rem; border-radius: 999px;">${u.userType || 'นักศึกษา'}</span>
         </td>
-        <td style="font-size: 0.8rem; color: var(--text-muted);">${registerDate}</td>
+        <td style="white-space: nowrap;">${roleBadge}</td>
+        <td style="white-space: nowrap;">
+          <div style="font-weight: 700; color: var(--primary); white-space: nowrap;">🔥 ${u.checkInStreak || 0} วัน</div>
+          <div style="font-size: 0.74rem; color: var(--text-muted); white-space: nowrap;">🏷️ ${u.customTitle || 'นักชิมมือใหม่'}</div>
+        </td>
+        <td style="font-size: 0.78rem; color: var(--text-muted); white-space: nowrap;">${registerDate}</td>
         <td>
-          <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
-            <button type="button" class="btn btn-sm btn-primary" onclick="openApplicantDetailModal('${u.id}')" title="ดูข้อมูลใบสมัครและโปรไฟล์">
+          <div style="display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-sm btn-primary" style="padding: 0.25rem 0.55rem; font-size: 0.76rem;" onclick="openApplicantDetailModal('${uid}')" title="ดูข้อมูลใบสมัครและโปรไฟล์">
               👁️ ใบสมัคร
             </button>
-            <button type="button" class="btn btn-sm btn-outline" onclick="adminToggleUserRole('${u.id}')" title="สลับสิทธิ์ Admin / User">
+            <button type="button" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.55rem; font-size: 0.76rem;" onclick="adminToggleUserRole('${uid}')" title="สลับสิทธิ์ Admin / User">
               ${isAdminUser ? 'ปลดแอดมิน' : 'แต่งตั้งแอดมิน'}
             </button>
-            <button type="button" class="btn btn-sm btn-outline" onclick="adminResetUserPassword('${u.id}')" title="รีเซ็ตรหัสผ่าน">
-              🔑 รหัส
+            <button type="button" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.55rem; font-size: 0.76rem;" onclick="adminResetUserPassword('${uid}')" title="ส่งอีเมลรีเซ็ตรหัสผ่าน">
+              🔑 รีเซ็ต
             </button>
             ${!isSelf ? `
-              <button type="button" class="btn btn-sm btn-outline btn-danger" onclick="adminDeleteUser('${u.id}')" title="ลบบัญชีผู้ใช้นี้">
+              <button type="button" class="btn btn-sm btn-outline btn-danger" style="padding: 0.25rem 0.55rem; font-size: 0.76rem;" onclick="adminDeleteUser('${uid}')" title="ลบข้อมูลโปรไฟล์ผู้ใช้นี้">
                 🗑️ ลบ
               </button>
-            ` : '<span style="font-size: 0.75rem; color: var(--text-muted); padding: 0.3rem;">คุณ</span>'}
+            ` : '<span style="font-size: 0.74rem; color: var(--text-muted); padding: 0.2rem 0.35rem;">คุณ</span>'}
           </div>
         </td>
       </tr>
@@ -2777,47 +3673,49 @@ function renderAdminUsers() {
 }
 
 function openApplicantDetailModal(userId) {
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const u = users.find(user => user.id === userId);
+  const users = AppState.users;
+  const u = users.find(user => (user.uid || user.id) === userId);
   if (!u) return;
 
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
+  const reviews = AppState.reviews;
   const userReviews = reviews.filter(r => r.userId === userId);
+  const registerDate = u.createdAtDisplay || formatFirebaseDate(u.createdAt, '-');
+  const effectiveStudentId = getEffectiveMemberId(u);
   const body = document.getElementById('applicantDetailBody');
   if (!body) return;
 
   body.innerHTML = `
     <div style="display: flex; gap: 1.5rem; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
-      <img src="${u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}" class="user-avatar ${u.equippedFrame || ''}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;">
+      ${renderFramedAvatar(u.avatar, u.equippedFrame || 'frame-none', 80, '', u.name)}
       <div>
-        <div style="font-size: 1.35rem; font-weight: 800; color: var(--text-color);">${u.name}</div>
-        <div style="color: var(--primary); font-weight: 700; font-size: 0.95rem; margin-top: 2px;">🆔 รหัสนักศึกษา/สมาชิก: ${u.studentId || '-'}</div>
+        <div style="font-size: 1.35rem; font-weight: 800; color: var(--text-main);">${u.name}</div>
+        <div style="color: var(--primary); font-weight: 700; font-size: 0.95rem; margin-top: 2px;">🆔 รหัสนักศึกษา/สมาชิก: ${effectiveStudentId}</div>
         <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">🏛️ สังกัด: ${u.faculty || 'ม.ศรีปทุม'} | ประเภท: ${u.userType || 'นักศึกษา'}</div>
         <div style="margin-top: 0.5rem; display: flex; gap: 0.4rem; flex-wrap: wrap;">
           <span style="background: ${u.role === 'admin' ? '#ede9fe' : 'var(--primary-light)'}; color: ${u.role === 'admin' ? '#6d28d9' : 'var(--primary)'}; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">
-            ${u.role === 'admin' ? '👑 ผู้ดูแลระบบ (Admin)' : '🎓 สมาชิกทั่วไป (Student/Member)'}
+            ${u.role === 'admin' ? '👑 ผู้ดูแลระบบ (Admin)' : '🎓 สมาชิกจานเด็ด SPU'}
           </span>
           <span style="background: #ecfdf5; color: #047857; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">
             ✅ ${u.status || 'อนุมัติแล้ว'}
           </span>
-          <span style="background: var(--bg-surface-alt); color: var(--text-color); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+          <span style="background: var(--bg-surface-alt); color: var(--text-main); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
             🏷️ ${u.customTitle || 'นักชิมมือใหม่'}
           </span>
         </div>
       </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+    <div class="mobile-stack-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
       <div style="background: var(--bg-surface-alt); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.35rem;">ข้อมูลการติดต่อ (Contact Info)</div>
         <div style="font-size: 0.9rem; margin-bottom: 0.25rem;"><strong>อีเมล:</strong> ${u.email}</div>
         <div style="font-size: 0.9rem;"><strong>เบอร์โทรศัพท์:</strong> ${u.phone || '-'}</div>
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;"><strong>วันที่สมัคร:</strong> ${u.createdAt || '-'}</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;"><strong>วันที่สมัคร:</strong> ${registerDate}</div>
       </div>
 
       <div style="background: var(--bg-surface-alt); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.35rem;">สถิติการใช้งาน (Engagement Stats)</div>
-        <div style="font-size: 0.9rem; margin-bottom: 0.25rem;"><strong>สตรีคล็อกอินรายสัปดาห์:</strong> 🔥 ${u.checkInStreak || 0}/7 วัน</div>
+        <div style="font-size: 0.9rem; margin-bottom: 0.25rem;"><strong>สตรีคเช็กอินสะสม:</strong> 🔥 ${u.checkInStreak || 0} วัน</div>
         <div style="font-size: 0.9rem; margin-bottom: 0.25rem;"><strong>รีวิวที่เขียน:</strong> 💬 ${userReviews.length} รีวิว</div>
         <div style="font-size: 0.9rem;"><strong>ร้านโปรดที่บันทึก:</strong> ❤️ ${(u.favorites || []).length} ร้าน</div>
       </div>
@@ -2828,13 +3726,13 @@ function openApplicantDetailModal(userId) {
       <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
         บัดจ์: ${(u.badges || []).map(bId => {
           const b = BADGES_LIST.find(x => x.id === bId);
-          return `<span style="display: inline-block; background: var(--bg-card); padding: 0.2rem 0.5rem; border-radius: 4px; margin: 2px; border: 1px solid var(--border-color); font-weight: 600;">${b ? b.icon + ' ' + b.name : bId}</span>`;
+          return `<span style="display: inline-block; background: var(--bg-surface); padding: 0.2rem 0.5rem; border-radius: 4px; margin: 2px; border: 1px solid var(--border-color); font-weight: 600;">${b ? b.icon + ' ' + b.name : bId}</span>`;
         }).join(' ')}
       </div>
       <div style="font-size: 0.85rem; color: var(--text-muted);">
         กรอบที่ปลดล็อก: ${(u.unlockedFrames || ['frame-none']).map(fId => {
           const f = PROFILE_FRAMES.find(x => x.id === fId);
-          return `<span style="display: inline-block; background: var(--bg-card); padding: 0.2rem 0.5rem; border-radius: 4px; margin: 2px; border: 1px solid var(--border-color);">${f ? f.name : fId}</span>`;
+          return `<span style="display: inline-block; background: var(--bg-surface); padding: 0.2rem 0.5rem; border-radius: 4px; margin: 2px; border: 1px solid var(--border-color);">${f ? f.name : fId}</span>`;
         }).join(' ')}
       </div>
     </div>
@@ -2847,34 +3745,38 @@ function openApplicantDetailModal(userId) {
   openModal('applicantDetailModal');
 }
 
-function adminToggleUserRole(userId) {
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const target = users.find(u => u.id === userId);
+async function adminToggleUserRole(userId) {
+  if (!isAdmin()) return;
+  const target = AppState.users.find(u => (u.uid || u.id) === userId);
   if (!target) return;
 
-  const newRole = target.role === 'admin' ? 'student' : 'admin';
-  const roleName = newRole === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : 'ผู้ใช้ทั่วไป (Student)';
-  
-  if (!confirm(`คุณต้องการเปลี่ยนสิทธิ์ของ "${target.name}" เป็น "${roleName}" ใช่หรือไม่?`)) return;
-
-  target.role = newRole;
-  Store.set(STORAGE_KEYS.USERS, users);
-
   const currentUser = getCurrentUser();
-  if (currentUser && currentUser.id === userId) {
-    currentUser.role = newRole;
-    setCurrentUser(currentUser);
+  const currentUid = currentUser ? (currentUser.uid || currentUser.id) : null;
+  const newRole = target.role === 'admin' ? 'user' : 'admin';
+
+  if (currentUid && currentUid === userId && newRole !== 'admin') {
+    showToast('ไม่สามารถปลดสิทธิ์แอดมินของบัญชีที่กำลังใช้งานอยู่ได้', 'error');
+    return;
   }
 
-  showToast(`อัปเดตสิทธิ์ของ "${target.name}" เป็น ${roleName} เรียบร้อยแล้ว`, 'success');
-  renderAdminUsers();
-  renderAdminStats();
-  renderNavUser();
+  const roleName = newRole === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : 'สมาชิกทั่วไป (User)';
+  if (!confirm(`คุณต้องการเปลี่ยนสิทธิ์ของ "${target.name}" เป็น "${roleName}" ใช่หรือไม่?`)) return;
+
+  try {
+    await window.FirestoreService.adminUpdateUser(userId, { role: newRole });
+    target.role = newRole;
+    showToast(`อัปเดตสิทธิ์ของ "${target.name}" เป็น ${roleName} เรียบร้อยแล้ว`, 'success');
+    renderAdminUsers();
+    renderAdminStats();
+  } catch (err) {
+    console.error('Toggle user role error:', err);
+    showToast('เปลี่ยนสิทธิ์สมาชิกไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
 }
 
-function adminEditUserTitle(userId) {
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const target = users.find(u => u.id === userId);
+async function adminEditUserTitle(userId) {
+  if (!isAdmin()) return;
+  const target = AppState.users.find(u => (u.uid || u.id) === userId);
   if (!target) return;
 
   const current = target.customTitle || "นักชิมมือใหม่";
@@ -2882,82 +3784,83 @@ function adminEditUserTitle(userId) {
   if (input === null || !input.trim()) return;
 
   const newTitle = input.trim();
-  target.customTitle = newTitle;
-  if (!target.unlockedTitles) target.unlockedTitles = ["นักชิมมือใหม่"];
-  if (!target.unlockedTitles.includes(newTitle)) {
-    target.unlockedTitles.push(newTitle);
+  const unlockedTitles = [...(target.unlockedTitles || ["นักชิมมือใหม่"])];
+  if (!unlockedTitles.includes(newTitle)) {
+    unlockedTitles.push(newTitle);
   }
 
-  Store.set(STORAGE_KEYS.USERS, users);
-
-  const currentUser = getCurrentUser();
-  if (currentUser && currentUser.id === userId) {
-    currentUser.customTitle = newTitle;
-    currentUser.unlockedTitles = target.unlockedTitles;
-    setCurrentUser(currentUser);
+  try {
+    await window.FirestoreService.adminUpdateUser(userId, { customTitle: newTitle, unlockedTitles });
+    target.customTitle = newTitle;
+    target.unlockedTitles = unlockedTitles;
+    showToast(`อัปเดตฉายาของ "${target.name}" เป็น "${newTitle}" สำเร็จ`, 'success');
+    renderAdminUsers();
+    renderLeaderboard();
+  } catch (err) {
+    console.error('Edit user title error:', err);
+    showToast('อัปเดตฉายาไม่สำเร็จ', 'error');
   }
-
-  showToast(`อัปเดตฉายาของ "${target.name}" เป็น "${newTitle}" สำเร็จ`, 'success');
-  renderAdminUsers();
-  renderLeaderboard();
-  renderNavUser();
 }
 
-function adminResetUserPassword(userId) {
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const target = users.find(u => u.id === userId);
-  if (!target) return;
+async function adminResetUserPassword(userId) {
+  if (!isAdmin()) return;
+  const target = AppState.users.find(u => (u.uid || u.id) === userId);
+  if (!target || !target.email) return;
 
-  const newPassword = prompt(`ตั้งรหัสผ่านใหม่สำหรับ "${target.name}" (อย่างน้อย 8 ตัวอักษร):`, "password123");
-  if (!newPassword) return;
+  if (!confirm(`ส่งอีเมลรีเซ็ตรหัสผ่านผ่าน Firebase Authentication ไปที่ ${target.email} ใช่หรือไม่?`)) return;
 
-  if (newPassword.length < 8) {
-    showToast('รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร', 'error');
-    return;
+  try {
+    await window.AuthService.sendPasswordReset(target.email);
+    showToast(`ส่งลิงก์รีเซ็ตรหัสผ่านไปที่ "${target.email}" เรียบร้อยแล้ว 📧`, 'success');
+  } catch (err) {
+    console.error('Reset password email error:', err);
+    showToast('ส่งอีเมลรีเซ็ตรหัสผ่านไม่สำเร็จ: ' + translateFirebaseAuthError(err), 'error');
   }
-
-  target.password = newPassword;
-  Store.set(STORAGE_KEYS.USERS, users);
-
-  const currentUser = getCurrentUser();
-  if (currentUser && currentUser.id === userId) {
-    currentUser.password = newPassword;
-    setCurrentUser(currentUser);
-  }
-
-  showToast(`รีเซ็ตรหัสผ่านของ "${target.name}" เรียบร้อยแล้ว`, 'success');
 }
 
-function adminDeleteUser(userId) {
+async function adminDeleteUser(userId) {
+  if (!isAdmin()) return;
   const currentUser = getCurrentUser();
-  if (currentUser && currentUser.id === userId) {
+  const currentUid = currentUser ? (currentUser.uid || currentUser.id) : null;
+  if (currentUid && currentUid === userId) {
     showToast('ไม่สามารถลบบัญชีแอดมินที่กำลังใช้งานอยู่ในขณะนี้ได้', 'error');
     return;
   }
 
-  const users = Store.get(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const target = users.find(u => u.id === userId);
+  const target = AppState.users.find(u => (u.uid || u.id) === userId);
   if (!target) return;
 
-  if (!confirm(`⚠️ ยืนยันการลบบัญชี "${target.name}" (${target.email}) ออกจากระบบอย่างถาวร?`)) return;
+  if (!confirm(`⚠️ ยืนยันการลบข้อมูลสมาชิก "${target.name}" (${target.email}) ออกจาก Cloud Firestore?\n(หมายเหตุ: หากต้องการลบบัญชีเข้าสู่ระบบถาวร ให้ลบในหน้า Firebase Authentication เพิ่มเติมด้วย)`)) return;
 
-  const updated = users.filter(u => u.id !== userId);
-  Store.set(STORAGE_KEYS.USERS, updated);
-
-  showToast(`ลบบัญชี "${target.name}" เรียบร้อยแล้ว`, 'info');
-  renderAdminUsers();
-  renderAdminStats();
-  renderLeaderboard();
+  try {
+    await window.FirestoreService.adminDeleteUserDoc(userId);
+    showToast(`ลบข้อมูลโปรไฟล์ของ "${target.name}" ออกจาก Firestore เรียบร้อยแล้ว`, 'info');
+  } catch (err) {
+    console.error('Delete user error:', err);
+    showToast('ลบข้อมูลสมาชิกไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
 }
 
 function renderAdminRestaurantsTable() {
   const tbody = document.getElementById('adminRestaurantTableBody');
   if (!tbody) return;
 
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
+  const restaurants = AppState.restaurants;
+
+  if (!restaurants || restaurants.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+          ยังไม่มีร้านอาหารใน Cloud Firestore — กดปุ่ม "+ เพิ่มร้านอาหารใหม่" ด้านบนเพื่อเริ่มต้น
+        </td>
+      </tr>
+    `;
+    return;
+  }
 
   tbody.innerHTML = restaurants.map(rst => {
     const stats = calculateRestaurantRating(rst.id);
+    const ratingLabel = stats.count > 0 ? `⭐ ${stats.avg.toFixed(1)} (${stats.count})` : '⭐ 0.0 (ยังไม่มีรีวิว)';
     return `
       <tr>
         <td>
@@ -2966,7 +3869,7 @@ function renderAdminRestaurantsTable() {
         <td><strong>${rst.name}</strong></td>
         <td>${rst.location}</td>
         <td><span style="font-size: 0.8rem; background: var(--bg-surface-alt); padding: 0.2rem 0.5rem; border-radius: 4px;">${rst.category}</span></td>
-        <td>⭐ ${stats.count > 0 ? stats.avg.toFixed(1) : rst.rating.toFixed(1)}</td>
+        <td>${ratingLabel}</td>
         <td>${(rst.menus || []).length} เมนู</td>
         <td>
           <div style="display: flex; gap: 0.4rem;">
@@ -3099,7 +4002,7 @@ function handleRestaurantMultiFileUpload(event) {
     }
 
     try {
-      const compressedDataUrl = await compressImageFile(file, 800, 800, 0.78);
+      const compressedDataUrl = await compressImageFile(file, 720, 720, 0.72);
       if (compressedDataUrl && rstFormCurrentImages.length < 5) {
         rstFormCurrentImages.push(compressedDataUrl);
       }
@@ -3192,9 +4095,10 @@ function previewRestaurantImageUrl(url) {
 }
 
 // ==========================================
-// Recommended Menus Manager (3 - 4 items with photos)
+// Recommended Menus Manager & Store Menu Sections Manager
 // ==========================================
 let rstFormCurrentMenus = [];
+let rstFormCurrentMenuSections = [];
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -3212,15 +4116,15 @@ function renderRestaurantFormMenus() {
   if (!container) return;
 
   if (addBtn) {
-    addBtn.disabled = rstFormCurrentMenus.length >= 4;
-    addBtn.style.opacity = rstFormCurrentMenus.length >= 4 ? '0.5' : '1';
-    addBtn.textContent = rstFormCurrentMenus.length >= 4 ? 'ครบ 4 เมนูแล้ว' : '➕ เพิ่มเมนูแนะนำ';
+    addBtn.disabled = rstFormCurrentMenus.length >= 12;
+    addBtn.style.opacity = rstFormCurrentMenus.length >= 12 ? '0.5' : '1';
+    addBtn.textContent = rstFormCurrentMenus.length >= 12 ? 'ครบ 12 เมนูแล้ว' : '➕ เพิ่มเมนูแนะนำ';
   }
 
   if (rstFormCurrentMenus.length === 0) {
     container.innerHTML = `
       <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
-        ยังไม่มีเมนูแนะนำ คลิกปุ่ม "➕ เพิ่มเมนูแนะนำ" ด้านบนเพื่อเพิ่ม (แนะนำ 3 - 4 รายการ)
+        ไม่มีเมนูแนะนำ (หากเป็นร้านเลือกหยิบเองสามารถเว้นว่างได้ หรือคลิก "➕ เพิ่มเมนูแนะนำ" ด้านบน)
       </div>
     `;
     return;
@@ -3239,13 +4143,17 @@ function renderRestaurantFormMenus() {
 
       <!-- Menu Name & Price Inputs -->
       <div style="flex: 1; min-width: 220px; display: flex; gap: 0.5rem; flex-direction: column;">
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
           <span style="font-size: 0.75rem; font-weight: 800; background: var(--bg-surface-alt); padding: 0.2rem 0.5rem; border-radius: 4px; color: var(--primary); white-space: nowrap;">⭐ เมนูที่ ${idx + 1}</span>
-          <input type="text" class="form-control" style="padding: 0.35rem 0.65rem; font-size: 0.875rem;" placeholder="ชื่อเมนู เช่น ข้าวกะเพราหมูกรอบไข่ดาว" value="${escapeHtml(m.name || '')}" oninput="updateMenuField(${idx}, 'name', this.value)" required>
+          <input type="text" class="form-control" style="flex: 1; min-width: 150px; padding: 0.35rem 0.65rem; font-size: 0.875rem;" placeholder="ชื่อเมนู เช่น ข้าวกะเพราหมูกรอบไข่ดาว" value="${escapeHtml(m.name || '')}" oninput="updateMenuField(${idx}, 'name', this.value)">
+          <label style="display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text-muted); cursor: pointer; white-space: nowrap;">
+            <input type="checkbox" ${m.isRecommended !== false ? 'checked' : ''} onchange="updateMenuField(${idx}, 'isRecommended', this.checked)">
+            แสดงเป็นเมนูแนะนำ
+          </label>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 0.35rem; width: 130px;">
-            <input type="number" min="0" max="9999" class="form-control" style="padding: 0.35rem 0.5rem; font-size: 0.85rem;" placeholder="ราคา" value="${m.price || 50}" oninput="updateMenuField(${idx}, 'price', this.value)" required>
+            <input type="number" min="0" max="9999" class="form-control" style="padding: 0.35rem 0.5rem; font-size: 0.85rem;" placeholder="ราคา" value="${m.price || 50}" oninput="updateMenuField(${idx}, 'price', this.value)">
             <span style="font-size: 0.8rem; color: var(--text-muted);">บาท</span>
           </div>
           <button type="button" class="btn btn-outline btn-sm" style="font-size: 0.75rem; padding: 0.35rem 0.55rem; white-space: nowrap;" onclick="document.getElementById('rstMenuFileInput_${idx}').click()">
@@ -3256,18 +4164,16 @@ function renderRestaurantFormMenus() {
       </div>
 
       <!-- Delete Button -->
-      ${rstFormCurrentMenus.length > 1 ? `
-        <button type="button" class="btn btn-outline btn-danger btn-sm" onclick="removeRestaurantFormMenuSlot(${idx})" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;" title="ลบเมนูนี้">
-          🗑️
-        </button>
-      ` : ''}
+      <button type="button" class="btn btn-outline btn-danger btn-sm" onclick="removeRestaurantFormMenuSlot(${idx})" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;" title="ลบเมนูนี้">
+        🗑️
+      </button>
     </div>
   `).join('');
 }
 
 function addRestaurantFormMenuSlot() {
-  if (rstFormCurrentMenus.length >= 4) {
-    showToast('สามารถเพิ่มเมนูแนะนำได้สูงสุด 4 รายการครับ', 'info');
+  if (rstFormCurrentMenus.length >= 12) {
+    showToast('สามารถเพิ่มเมนูแนะนำได้สูงสุด 12 รายการครับ', 'info');
     return;
   }
   rstFormCurrentMenus.push({
@@ -3282,10 +4188,6 @@ function addRestaurantFormMenuSlot() {
 }
 
 function removeRestaurantFormMenuSlot(idx) {
-  if (rstFormCurrentMenus.length <= 1) {
-    showToast('ร้านอาหารควรมีเมนูแนะนำอย่างน้อย 1 รายการ', 'info');
-    return;
-  }
   rstFormCurrentMenus.splice(idx, 1);
   renderRestaurantFormMenus();
   SoundFX.playTick();
@@ -3297,6 +4199,8 @@ function updateMenuField(idx, field, value) {
     rstFormCurrentMenus[idx].name = value;
   } else if (field === 'price') {
     rstFormCurrentMenus[idx].price = Number(value) || 0;
+  } else if (field === 'isRecommended') {
+    rstFormCurrentMenus[idx].isRecommended = Boolean(value);
   } else if (field === 'imageUrl') {
     if (!value.startsWith('data:')) {
       rstFormCurrentMenus[idx].image = value.trim();
@@ -3304,6 +4208,95 @@ function updateMenuField(idx, field, value) {
       if (thumb && value.trim()) thumb.src = value.trim();
     }
   }
+}
+
+// ==========================================
+// Store Menu Sections Manager (📋 รายการเมนูในร้าน)
+// ==========================================
+function renderRestaurantFormMenuSections() {
+  const container = document.getElementById('rstFormMenuSectionsContainer');
+  if (!container) return;
+
+  if (!Array.isArray(rstFormCurrentMenuSections) || rstFormCurrentMenuSections.length === 0) {
+    container.innerHTML = `
+      <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
+        ยังไม่มีหมวดหมู่รายการเมนูในร้าน คลิกปุ่ม "➕ เพิ่มหมวดหมู่เมนู" ด้านบนเพื่อเพิ่มรายการอาหารและราคา
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = rstFormCurrentMenuSections.map((sec, sIdx) => `
+    <div class="rst-form-section-card" style="background: var(--bg-surface); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 0.9rem;">
+      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.7rem; padding-bottom: 0.6rem; border-bottom: 1px dashed var(--border-color);">
+        <span style="font-size: 0.75rem; font-weight: 800; background: var(--primary-light); color: var(--primary); padding: 0.2rem 0.55rem; border-radius: 4px; white-space: nowrap;">หมวด ${sIdx + 1}</span>
+        <input type="text" class="form-control" style="flex: 2; min-width: 180px; padding: 0.35rem 0.6rem; font-size: 0.875rem; font-weight: 700;" placeholder="ชื่อหมวด เช่น เมนูจานพิเศษ / น้ำซุป / เมนูหมู" value="${escapeHtml(sec.title || '')}" oninput="updateMenuSectionField(${sIdx}, 'title', this.value)">
+        <input type="text" class="form-control" style="flex: 1; min-width: 140px; padding: 0.35rem 0.6rem; font-size: 0.8rem;" placeholder="คำอธิบายย่อย (ไม่บังคับ) เช่น โปร 10 แถม 1" value="${escapeHtml(sec.subtitle || '')}" oninput="updateMenuSectionField(${sIdx}, 'subtitle', this.value)">
+        <button type="button" class="btn btn-outline btn-danger btn-sm" style="padding: 0.35rem 0.6rem; font-size: 0.78rem; white-space: nowrap;" onclick="removeRestaurantMenuSectionSlot(${sIdx})" title="ลบหมวดหมู่นี้">
+          🗑️ ลบหมวด
+        </button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+        ${(sec.items || []).map((item, iIdx) => `
+          <div style="display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap;">
+            <input type="text" class="form-control" style="flex: 1; min-width: 190px; padding: 0.32rem 0.6rem; font-size: 0.84rem;" placeholder="ชื่อรายการอาหาร เช่น ไข่ 1 ฟอง (เลือกเครื่องได้ 4 อย่าง)" value="${escapeHtml(item.name || '')}" oninput="updateMenuSectionItemField(${sIdx}, ${iIdx}, 'name', this.value)">
+            <input type="text" class="form-control" style="width: 130px; padding: 0.32rem 0.6rem; font-size: 0.84rem;" placeholder="ราคา เช่น 40.-" value="${escapeHtml(item.price || '')}" oninput="updateMenuSectionItemField(${sIdx}, ${iIdx}, 'price', this.value)">
+            <button type="button" class="btn btn-outline btn-danger btn-sm" style="padding: 0.28rem 0.55rem; font-size: 0.78rem;" onclick="removeRestaurantMenuSectionItem(${sIdx}, ${iIdx})" title="ลบรายการนี้">✕</button>
+          </div>
+        `).join('')}
+      </div>
+
+      <div style="margin-top: 0.6rem;">
+        <button type="button" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 0.3rem 0.7rem;" onclick="addRestaurantMenuSectionItem(${sIdx})">
+          ➕ เพิ่มรายการในหมวดนี้
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addRestaurantMenuSectionSlot() {
+  rstFormCurrentMenuSections.push({
+    title: '',
+    subtitle: '',
+    items: [{ name: '', price: '' }]
+  });
+  renderRestaurantFormMenuSections();
+  SoundFX.playTick();
+}
+
+function removeRestaurantMenuSectionSlot(secIdx) {
+  rstFormCurrentMenuSections.splice(secIdx, 1);
+  renderRestaurantFormMenuSections();
+  SoundFX.playTick();
+}
+
+function updateMenuSectionField(secIdx, field, value) {
+  if (!rstFormCurrentMenuSections[secIdx]) return;
+  rstFormCurrentMenuSections[secIdx][field] = value;
+}
+
+function addRestaurantMenuSectionItem(secIdx) {
+  if (!rstFormCurrentMenuSections[secIdx]) return;
+  if (!Array.isArray(rstFormCurrentMenuSections[secIdx].items)) {
+    rstFormCurrentMenuSections[secIdx].items = [];
+  }
+  rstFormCurrentMenuSections[secIdx].items.push({ name: '', price: '' });
+  renderRestaurantFormMenuSections();
+  SoundFX.playTick();
+}
+
+function removeRestaurantMenuSectionItem(secIdx, itemIdx) {
+  if (!rstFormCurrentMenuSections[secIdx] || !Array.isArray(rstFormCurrentMenuSections[secIdx].items)) return;
+  rstFormCurrentMenuSections[secIdx].items.splice(itemIdx, 1);
+  renderRestaurantFormMenuSections();
+  SoundFX.playTick();
+}
+
+function updateMenuSectionItemField(secIdx, itemIdx, field, value) {
+  if (!rstFormCurrentMenuSections[secIdx]?.items?.[itemIdx]) return;
+  rstFormCurrentMenuSections[secIdx].items[itemIdx][field] = value;
 }
 
 async function handleMenuPhotoFileChange(event, idx) {
@@ -3317,7 +4310,7 @@ async function handleMenuPhotoFileChange(event, idx) {
 
   showToast('กำลังประมวลผลรูปภาพเมนู...', 'info');
   try {
-    const compressed = await compressImageFile(file, 600, 600, 0.78);
+    const compressed = await compressImageFile(file, 480, 480, 0.70);
     if (compressed && rstFormCurrentMenus[idx]) {
       rstFormCurrentMenus[idx].image = compressed;
       renderRestaurantFormMenus();
@@ -3384,7 +4377,7 @@ function openAddRestaurantModal() {
   rstFormCurrentImages = [];
   renderRestaurantFormImages();
 
-  // Initialize with 3 recommended menu slots by default (allows up to 4)
+  // Initialize with 3 recommended menu slots by default (optional)
   rstFormCurrentMenus = [
     { id: `m_${Date.now()}_1`, name: '', price: 50, image: '', isRecommended: true },
     { id: `m_${Date.now()}_2`, name: '', price: 55, image: '', isRecommended: true },
@@ -3392,18 +4385,21 @@ function openAddRestaurantModal() {
   ];
   renderRestaurantFormMenus();
 
+  rstFormCurrentMenuSections = [];
+  renderRestaurantFormMenuSections();
+
   document.getElementById('restaurantFormModalTitle').textContent = '➕ เพิ่มร้านอาหารใหม่ใน SPU';
   openModal('restaurantFormModal');
 }
 
-function openEditRestaurantModal(restaurantId) {
+function openEditRestaurantModal(restaurantId, focusSection = '') {
   if (!isAdmin()) {
     showToast('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถแก้ไขร้านอาหารได้ กรุณาเข้าสู่ระบบด้วยบัญชีแอดมิน', 'info');
     openAdminAccessModal();
     return;
   }
 
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
+  const restaurants = AppState.restaurants;
   const rst = restaurants.find(r => r.id === restaurantId);
   if (!rst) {
     showToast('ไม่พบข้อมูลร้านอาหารที่ต้องการแก้ไข', 'error');
@@ -3459,14 +4455,14 @@ function openEditRestaurantModal(restaurantId) {
   }
   renderRestaurantFormImages();
 
-  // Load existing recommended menus (up to 4)
+  // Load existing recommended menus (up to 12)
   if (Array.isArray(rst.menus) && rst.menus.length > 0) {
-    rstFormCurrentMenus = rst.menus.slice(0, 4).map((m, idx) => ({
+    rstFormCurrentMenus = rst.menus.slice(0, 12).map((m, idx) => ({
       id: m.id || `m_${Date.now()}_${idx}`,
       name: m.name || '',
       price: m.price || 50,
       image: m.image || '',
-      isRecommended: true
+      isRecommended: m.isRecommended !== false
     }));
   } else {
     rstFormCurrentMenus = [
@@ -3477,11 +4473,31 @@ function openEditRestaurantModal(restaurantId) {
   }
   renderRestaurantFormMenus();
 
+  // Load existing store menu sections (📋 รายการเมนูในร้าน)
+  if (Array.isArray(rst.menuSections) && rst.menuSections.length > 0) {
+    rstFormCurrentMenuSections = rst.menuSections.map(sec => ({
+      title: sec.title || '',
+      subtitle: sec.subtitle || '',
+      items: Array.isArray(sec.items) && sec.items.length > 0
+        ? sec.items.map(it => ({ name: it.name || '', price: it.price || '' }))
+        : [{ name: '', price: '' }]
+    }));
+  } else {
+    rstFormCurrentMenuSections = [];
+  }
+  renderRestaurantFormMenuSections();
+
   document.getElementById('restaurantFormModalTitle').textContent = `✏️ แก้ไขข้อมูลร้าน: ${rst.name}`;
   openModal('restaurantFormModal');
+
+  if (focusSection === 'menuSections') {
+    setTimeout(() => {
+      document.getElementById('rstFormMenuSectionsBox')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+  }
 }
 
-function handleRestaurantFormSubmit(event) {
+async function handleRestaurantFormSubmit(event) {
   event.preventDefault();
 
   if (!isAdmin()) {
@@ -3490,8 +4506,13 @@ function handleRestaurantFormSubmit(event) {
     return;
   }
 
+  if (!window.FirestoreService?.isConfigured()) {
+    showToast('⚠️ กรุณาตั้งค่า firebaseConfig ใน js/firebase-config.js ก่อนบันทึกข้อมูล', 'warning');
+    return;
+  }
+
   const id = document.getElementById('editRestaurantId').value;
-  const name = (document.getElementById('rstName')?.value || '').trim();
+  const name = (document.getElementById('rstName')?.value || '').trim() || 'ร้านอร่อย SPU';
   const location = document.getElementById('rstLocation')?.value || SPU_LOCATIONS[0];
   const category = document.getElementById('rstCategory')?.value || FOOD_CATEGORIES[0];
   const priceRange = document.getElementById('rstPriceRange')?.value || '40 - 60 บาท';
@@ -3501,12 +4522,6 @@ function handleRestaurantFormSubmit(event) {
   const tagsStr = document.getElementById('rstTags')?.value || '';
   const tags = tagsStr.split(',').map(t => t.trim()).filter(Boolean);
 
-  if (!name) {
-    showToast('กรุณากรอกชื่อร้านอาหาร', 'warning');
-    document.getElementById('rstName')?.focus();
-    return;
-  }
-
   // Take images from gallery manager (up to 5)
   const images = [...rstFormCurrentImages];
   let primaryImage = images[0];
@@ -3515,18 +4530,37 @@ function handleRestaurantFormSubmit(event) {
     images.push(primaryImage);
   }
 
-  // Collect cleaned recommended menus (3-4 items)
+  // Collect cleaned recommended/photo menus
   const cleanedMenus = rstFormCurrentMenus
     .map(m => ({
       id: m.id || `menu_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       name: (m.name || '').trim(),
       price: Number(m.price) || avgPrice || 50,
       image: m.image || primaryImage || '',
-      isRecommended: true
+      isRecommended: m.isRecommended !== false
     }))
     .filter(m => m.name.length > 0);
 
-  if (cleanedMenus.length === 0) {
+  // Collect cleaned store menu sections (📋 รายการเมนูในร้าน)
+  const cleanedMenuSections = (rstFormCurrentMenuSections || [])
+    .map(sec => {
+      const cleanedItems = (sec.items || [])
+        .map(it => ({
+          name: (it.name || '').trim(),
+          price: (it.price || '').trim()
+        }))
+        .filter(it => it.name.length > 0 || it.price.length > 0);
+      const sectionObj = {
+        title: (sec.title || '').trim() || 'รายการเมนู',
+        items: cleanedItems
+      };
+      const sub = (sec.subtitle || '').trim();
+      if (sub) sectionObj.subtitle = sub;
+      return sectionObj;
+    })
+    .filter(sec => sec.items.length > 0 || (sec.title && sec.title !== 'รายการเมนู'));
+
+  if (cleanedMenus.length === 0 && cleanedMenuSections.length === 0) {
     cleanedMenus.push({
       id: `menu_${Date.now()}`,
       name: `เมนูจานเด็ด ${name}`,
@@ -3536,93 +4570,69 @@ function handleRestaurantFormSubmit(event) {
     });
   }
 
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
-  let targetRst = null;
+  const payload = {
+    name,
+    location,
+    category,
+    priceRange,
+    avgPrice,
+    openHours,
+    image: primaryImage,
+    images,
+    description,
+    tags,
+    menus: cleanedMenus,
+    menuSections: cleanedMenuSections
+  };
 
-  if (id) {
-    // Edit existing restaurant
-    const idx = restaurants.findIndex(r => r.id === id);
-    if (idx > -1) {
-      restaurants[idx] = {
-        ...restaurants[idx],
-        name,
-        location,
-        category,
-        priceRange,
-        avgPrice,
-        openHours,
-        image: primaryImage,
-        images,
-        description,
-        tags,
-        menus: cleanedMenus
-      };
-      targetRst = restaurants[idx];
-      showToast(`อัปเดตข้อมูลร้าน "${name}" สำเร็จ! 🎉`, 'success');
-    } else {
-      showToast('ไม่พบข้อมูลร้านอาหารที่ต้องการแก้ไข', 'error');
-      return;
-    }
-  } else {
-    // Add New restaurant
-    const newRst = {
-      id: `rst_${Date.now()}`,
-      name,
-      location,
-      category,
-      priceRange,
-      avgPrice,
-      rating: 5.0,
-      reviewCount: 0,
-      image: primaryImage,
-      images,
-      description,
-      openHours,
-      tags,
-      menus: cleanedMenus
-    };
-    restaurants.unshift(newRst);
-    targetRst = newRst;
-    showToast(`เพิ่มร้านอาหาร "${name}" ใน SPU เรียบร้อย! 🍽️`, 'success');
+  // Validate against Firestore 1 MiB document size ceiling
+  const payloadBytes = new TextEncoder().encode(JSON.stringify(payload)).length;
+  if (payloadBytes > 900000) {
+    showToast('⚠️ ขนาดรูปภาพรวมใหญ่เกินขีดจำกัดของ Firestore (1MB) กรุณาลดจำนวนรูปหรือใช้รูปที่ขนาดเล็กลง', 'error');
+    return;
   }
 
-  // Save to LocalStorage
-  Store.set(STORAGE_KEYS.RESTAURANTS, restaurants);
+  const submitBtn = event.target?.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
 
-  // Sync to Backend Server if running on localhost / server
   try {
-    if (window.location.protocol.startsWith('http') && targetRst) {
-      fetch('/api/restaurants', {
-        method: id ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(targetRst)
-      }).catch(() => {});
+    if (id) {
+      await window.FirestoreService.updateRestaurant(id, payload);
+      showToast(`อัปเดตข้อมูลร้าน "${name}" ลง Cloud Firestore สำเร็จ! 🎉`, 'success');
+    } else {
+      await window.FirestoreService.addRestaurant({
+        ...payload,
+        rating: 0,
+        reviewCount: 0
+      });
+      showToast(`เพิ่มร้านอาหาร "${name}" ลง Cloud Firestore เรียบร้อย! 🍽️`, 'success');
     }
-  } catch (e) {}
 
-  SoundFX.playWin();
-  closeModal('restaurantFormModal');
+    SoundFX.playWin();
+    closeModal('restaurantFormModal');
 
-  // Refresh UI
-  filterRestaurants();
-  renderAdminRestaurantsTable();
-  initWheel();
-
-  // If the detail modal is currently showing this restaurant, refresh it
-  if (currentDetailRestaurantId && currentDetailRestaurantId === id) {
-    openRestaurantDetail(id);
+    if (currentDetailRestaurantId && id && currentDetailRestaurantId === id) {
+      setTimeout(() => openRestaurantDetail(id), 150);
+    }
+  } catch (err) {
+    console.error('Save restaurant error:', err);
+    showToast('บันทึกข้อมูลร้านอาหารไม่สำเร็จ: ' + (err?.message || 'กรุณาตรวจสอบสิทธิ์แอดมินใน Firestore'), 'error');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
-function adminDeleteRestaurant(restaurantId) {
-  if (!confirm('⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบร้านอาหารนี้ออกจากระบบ SPU?')) return;
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
-  const updated = restaurants.filter(r => r.id !== restaurantId);
-  Store.set(STORAGE_KEYS.RESTAURANTS, updated);
-  showToast('ลบร้านอาหารเรียบร้อยแล้ว', 'info');
-  filterRestaurants();
-  renderAdminRestaurantsTable();
-  initWheel();
+async function adminDeleteRestaurant(restaurantId) {
+  if (!isAdmin()) return;
+  if (!confirm('⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบร้านอาหารนี้ออกจาก Cloud Firestore?')) return;
+
+  try {
+    await window.FirestoreService.deleteRestaurant(restaurantId);
+    showToast('ลบร้านอาหารออกจากฐานข้อมูลเรียบร้อยแล้ว', 'info');
+  } catch (err) {
+    console.error('Delete restaurant error:', err);
+    showToast('ลบร้านอาหารไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
 }
 
 function renderAdminReviews() {
@@ -3630,8 +4640,8 @@ function renderAdminReviews() {
   if (!container) return;
 
   const status = document.getElementById('reviewFilterStatus')?.value || 'all';
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-  const restaurants = Store.get(STORAGE_KEYS.RESTAURANTS, INITIAL_RESTAURANTS);
+  const reviews = AppState.reviews;
+  const restaurants = AppState.restaurants;
 
   let filtered = reviews;
   if (status === 'reported') {
@@ -3641,7 +4651,7 @@ function renderAdminReviews() {
   if (filtered.length === 0) {
     container.innerHTML = `
       <div style="padding: 2rem; text-align: center; color: var(--text-muted); background: var(--bg-surface-alt); border-radius: var(--radius-lg);">
-        🎉 ยอดเยี่ยม! ไม่พบรีวิวที่ไม่เหมาะสม หรือไม่มีรีวิวที่ถูกรายงานในขณะนี้
+        🎉 ยังไม่มีรีวิว${status === 'reported' ? 'ที่ถูกรายงาน' : 'ในระบบ'}ในขณะนี้
       </div>
     `;
     return;
@@ -3649,13 +4659,14 @@ function renderAdminReviews() {
 
   container.innerHTML = filtered.map(rev => {
     const rst = restaurants.find(r => r.id === rev.restaurantId);
+    const dateLabel = rev.date || formatFirebaseDate(rev.createdAt);
     return `
       <div style="padding: 1.25rem; border: 1.5px solid ${rev.reported ? '#fca5a5' : 'var(--border-color)'}; background: ${rev.reported ? '#fff5f5' : 'var(--bg-surface-alt)'}; border-radius: var(--radius-lg); margin-bottom: 1rem;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
           <div>
             ${rev.reported ? '<span style="background: #ef4444; color: #fff; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; margin-right: 0.5rem;">⚠️ ถูกรายงาน</span>' : ''}
             <strong>ร้าน: ${rst ? rst.name : 'ร้านในระบบ'}</strong> 
-            <span style="font-size: 0.85rem; color: var(--text-muted);">โดย ${rev.userName} (${rev.date})</span>
+            <span style="font-size: 0.85rem; color: var(--text-muted);">โดย ${rev.userName} (${dateLabel})</span>
           </div>
           <div style="color: #f59e0b;">${getStarSymbols(rev.rating)}</div>
         </div>
@@ -3677,14 +4688,14 @@ function renderAdminReviews() {
   }).join('');
 }
 
-function adminDismissReport(reviewId) {
-  const reviews = Store.get(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-  const rev = reviews.find(r => r.id === reviewId);
-  if (rev) {
-    rev.reported = false;
-    Store.set(STORAGE_KEYS.REVIEWS, reviews);
+async function adminDismissReport(reviewId) {
+  if (!isAdmin()) return;
+  try {
+    await window.FirestoreService.adminDismissReport(reviewId);
     showToast('ยกเลิกสถานะรายงานของรีวิวนี้แล้ว', 'success');
-    renderAdminReviews();
+  } catch (err) {
+    console.error('Dismiss report error:', err);
+    showToast('ดำเนินการไม่สำเร็จ', 'error');
   }
 }
 
@@ -3692,88 +4703,362 @@ function renderAdminNews() {
   const container = document.getElementById('adminNewsListContainer');
   if (!container) return;
 
-  const newsList = Store.get(STORAGE_KEYS.NEWS, INITIAL_NEWS);
+  const newsList = AppState.news;
+
+  if (!newsList || newsList.length === 0) {
+    container.innerHTML = `
+      <div style="padding: 2rem; text-align: center; color: var(--text-muted); background: var(--bg-surface-alt); border-radius: var(--radius-md);">
+        📢 ยังไม่มีข่าวสารหรือโปรโมชั่นใน Cloud Firestore
+      </div>
+    `;
+    return;
+  }
 
   container.innerHTML = newsList.map(item => `
-    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--bg-surface-alt); border-radius: var(--radius-md); margin-bottom: 0.5rem; border: 1px solid var(--border-color);">
-      <div>
-        <span style="font-size: 0.75rem; background: var(--primary-light); color: var(--primary); font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 4px;">${item.tag}</span>
-        <strong>${item.title}</strong>
-        <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem;">(${item.date})</span>
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.85rem; padding: 0.75rem 1rem; background: var(--bg-surface-alt); border-radius: var(--radius-md); margin-bottom: 0.5rem; border: 1px solid var(--border-color);">
+      <div style="display: flex; align-items: center; gap: 0.75rem; min-width: 0;">
+        ${item.image ? `<img src="${item.image}" alt="" style="width: 52px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); flex-shrink: 0;">` : ''}
+        <div style="min-width: 0;">
+          <span style="font-size: 0.75rem; background: var(--primary-light); color: var(--primary); font-weight: 700; padding: 0.15rem 0.45rem; border-radius: 4px; margin-right: 0.35rem;">${item.tag}</span>
+          <strong>${item.title}</strong>
+          <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem;">(${formatFirebaseDate(item.createdAt, item.date)})</span>
+        </div>
       </div>
-      <div>
+      <div style="flex-shrink: 0;">
         <button type="button" class="btn btn-sm btn-outline btn-danger" onclick="adminDeleteNews('${item.id}')">🗑️ ลบข่าว</button>
       </div>
     </div>
   `).join('');
 }
 
-function adminDeleteNews(newsId) {
+async function adminDeleteNews(newsId) {
+  if (!isAdmin()) return;
   if (!confirm('ยืนยันลบข่าวนี้ออกจากระบบ?')) return;
-  const newsList = Store.get(STORAGE_KEYS.NEWS, INITIAL_NEWS);
-  const updated = newsList.filter(n => n.id !== newsId);
-  Store.set(STORAGE_KEYS.NEWS, updated);
-  showToast('ลบข่าวสารเรียบร้อยแล้ว', 'info');
-  renderNewsGrid();
-  renderAdminNews();
+  try {
+    await window.FirestoreService.deleteNews(newsId);
+    showToast('ลบข่าวสารเรียบร้อยแล้ว', 'info');
+  } catch (err) {
+    console.error('Delete news error:', err);
+    showToast('ลบข่าวสารไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
 }
 
 function renderAdminThemePicker() {
   const grid = document.getElementById('themePickerGrid');
   if (!grid) return;
 
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  const currentTheme = settings.activeTheme || 'spu-classic';
+  const currentTheme = AppState.siteSettings.activeTheme || 'spu-classic';
 
   grid.innerHTML = Object.values(THEMES).map(t => {
     const isActive = t.id === currentTheme;
     return `
       <div class="theme-card-option ${isActive ? 'active' : ''}" onclick="changeThemeFromAdmin('${t.id}')">
-        <div class="theme-card-icon">${t.icon}</div>
-        <div class="theme-card-name">${t.name}</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
-          โทนสีหลัก: <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${t.primary}; vertical-align: middle;"></span>
+        ${t.bannerImage ? `
+          <div style="width: 100%; height: 92px; border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 0.65rem; border: 1.5px solid var(--border-color); background: #1e1b4b;">
+            <img src="${t.bannerImage}" alt="${t.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;">
+          </div>
+        ` : `<div class="theme-card-icon">${t.icon}</div>`}
+        <div class="theme-card-name">${t.icon} ${t.name}</div>
+        <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.35;">
+          ${t.festivalSubtitle || ''}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem; flex-wrap: wrap;">
+          <span>โทนสี:</span>
+          <span style="display: inline-block; width: 13px; height: 13px; border-radius: 50%; background: ${t.primary}; border: 1px solid rgba(0,0,0,0.18);"></span>
+          <span style="display: inline-block; width: 13px; height: 13px; border-radius: 50%; background: ${t.secondary}; border: 1px solid rgba(0,0,0,0.18);"></span>
+          <span style="display: inline-block; width: 13px; height: 13px; border-radius: 50%; background: ${t.accent}; border: 1px solid rgba(0,0,0,0.18);"></span>
+          ${isActive ? '<span style="margin-left: 0.25rem; color: var(--primary); font-weight: 700;">✅ ใช้งานอยู่</span>' : ''}
         </div>
       </div>
     `;
   }).join('');
 }
 
-function changeThemeFromAdmin(themeId) {
+async function changeThemeFromAdmin(themeId) {
+  if (!isAdmin()) return;
   applyTheme(themeId);
   renderAdminThemePicker();
-  showToast(`เปลี่ยนธีมเว็บไซต์เป็น "${THEMES[themeId].name}" เรียบร้อย 🎉`, 'success');
+
+  try {
+    if (window.FirestoreService?.isConfigured()) {
+      await window.FirestoreService.updateSiteSettings({ activeTheme: themeId });
+    }
+    showToast(`บันทึกธีม "${THEMES[themeId]?.name || themeId}" ลง Cloud Firestore เรียบร้อย 🎉`, 'success');
+  } catch (err) {
+    console.error('Update theme error:', err);
+    showToast('เปลี่ยนธีมไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
+}
+
+let showcaseUploadedImages = {
+  main: '',
+  float1: '',
+  float2: ''
+};
+
+function getEffectiveHeroShowcase(themeConfig) {
+  const activeTheme = themeConfig || THEMES[AppState.siteSettings?.activeTheme || 'spu-classic'] || THEMES['spu-classic'];
+  const saved = AppState.siteSettings?.heroShowcase || {};
+  const isCustom = Boolean(saved.customized);
+
+  return {
+    mainImg: (isCustom && saved.mainImg) ? saved.mainImg : (activeTheme.heroDishImg || DEFAULT_HERO_SHOWCASE.mainImg),
+    priceStamp: (isCustom && saved.priceStamp) ? saved.priceStamp : (activeTheme.heroPriceStamp || DEFAULT_HERO_SHOWCASE.priceStamp),
+    dishCat: (isCustom && saved.dishCat) ? saved.dishCat : (activeTheme.heroDishCat || DEFAULT_HERO_SHOWCASE.dishCat),
+    dishTitle: (isCustom && saved.dishTitle) ? saved.dishTitle : (activeTheme.heroDishTitle || DEFAULT_HERO_SHOWCASE.dishTitle),
+    dishMeta: (isCustom && saved.dishMeta) ? saved.dishMeta : (activeTheme.heroDishMeta || DEFAULT_HERO_SHOWCASE.dishMeta),
+    float1Img: saved.float1Img || DEFAULT_HERO_SHOWCASE.float1Img,
+    float1Title: saved.float1Title || DEFAULT_HERO_SHOWCASE.float1Title,
+    float1Sub: saved.float1Sub || DEFAULT_HERO_SHOWCASE.float1Sub,
+    float2Img: saved.float2Img || DEFAULT_HERO_SHOWCASE.float2Img,
+    float2Title: saved.float2Title || DEFAULT_HERO_SHOWCASE.float2Title,
+    float2Sub: saved.float2Sub || DEFAULT_HERO_SHOWCASE.float2Sub,
+    mascotBubble: (isCustom && saved.mascotBubble) ? saved.mascotBubble : (activeTheme.mascotSpeech || DEFAULT_HERO_SHOWCASE.mascotBubble),
+    customized: isCustom
+  };
+}
+
+function applyHeroShowcase(themeConfig) {
+  const sc = getEffectiveHeroShowcase(themeConfig);
+
+  const mainImgEl = document.getElementById('heroTastingMainImg');
+  if (mainImgEl && sc.mainImg) mainImgEl.src = sc.mainImg;
+
+  const priceStampEl = document.getElementById('heroTastingPriceStamp');
+  if (priceStampEl) priceStampEl.textContent = sc.priceStamp;
+
+  const dishCatEl = document.getElementById('heroTastingDishCat');
+  if (dishCatEl) dishCatEl.textContent = sc.dishCat;
+
+  const dishTitleEl = document.getElementById('heroTastingDishTitle');
+  if (dishTitleEl) dishTitleEl.textContent = sc.dishTitle;
+
+  const dishMetaEl = document.getElementById('heroTastingDishMeta');
+  if (dishMetaEl) dishMetaEl.textContent = sc.dishMeta;
+
+  const float1ImgEl = document.getElementById('heroFloat1Img');
+  if (float1ImgEl && sc.float1Img) float1ImgEl.src = sc.float1Img;
+
+  const float1TitleEl = document.getElementById('heroFloat1Title');
+  if (float1TitleEl) float1TitleEl.textContent = sc.float1Title;
+
+  const float1SubEl = document.getElementById('heroFloat1Sub');
+  if (float1SubEl) float1SubEl.textContent = sc.float1Sub;
+
+  const float2ImgEl = document.getElementById('heroFloat2Img');
+  if (float2ImgEl && sc.float2Img) float2ImgEl.src = sc.float2Img;
+
+  const float2TitleEl = document.getElementById('heroFloat2Title');
+  if (float2TitleEl) float2TitleEl.textContent = sc.float2Title;
+
+  const float2SubEl = document.getElementById('heroFloat2Sub');
+  if (float2SubEl) float2SubEl.textContent = sc.float2Sub;
+
+  const mascotBubbleEl = document.getElementById('heroMascotBubble');
+  if (mascotBubbleEl) mascotBubbleEl.textContent = sc.mascotBubble;
+}
+
+async function handleShowcaseImageUpload(event, slot = 'main') {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showToast('กรุณาเลือกไฟล์รูปภาพเท่านั้น (PNG, JPG, WebP, GIF)', 'error');
+    return;
+  }
+  const maxW = slot === 'main' ? 900 : 320;
+  const maxH = slot === 'main' ? 650 : 320;
+  try {
+    const compressed = await compressImageFile(file, maxW, maxH, 0.82);
+    if (compressed) {
+      showcaseUploadedImages[slot] = compressed;
+      if (slot === 'main') {
+        const prev = document.getElementById('editShowcaseMainPreview');
+        const urlIn = document.getElementById('editShowcaseMainImg');
+        if (prev) prev.src = compressed;
+        if (urlIn) urlIn.value = '';
+      } else if (slot === 'float1') {
+        const prev = document.getElementById('editShowcaseFloat1Preview');
+        const urlIn = document.getElementById('editShowcaseFloat1Img');
+        if (prev) prev.src = compressed;
+        if (urlIn) urlIn.value = '';
+      } else if (slot === 'float2') {
+        const prev = document.getElementById('editShowcaseFloat2Preview');
+        const urlIn = document.getElementById('editShowcaseFloat2Img');
+        if (prev) prev.src = compressed;
+        if (urlIn) urlIn.value = '';
+      }
+      showToast('แนบรูปภาพตัวอย่างเรียบร้อยแล้ว (กดบันทึกด้านล่างเพื่อใช้งานจริง)', 'info');
+    }
+  } catch (err) {
+    console.error('Upload showcase image error:', err);
+    showToast('อ่านไฟล์รูปภาพไม่สำเร็จ', 'error');
+  } finally {
+    if (event.target) event.target.value = '';
+  }
+}
+
+function previewShowcaseUrlInput(slot, val) {
+  const trimmed = (val || '').trim();
+  if (!trimmed) return;
+  showcaseUploadedImages[slot] = '';
+  if (slot === 'main') {
+    const prev = document.getElementById('editShowcaseMainPreview');
+    if (prev) prev.src = trimmed;
+  } else if (slot === 'float1') {
+    const prev = document.getElementById('editShowcaseFloat1Preview');
+    if (prev) prev.src = trimmed;
+  } else if (slot === 'float2') {
+    const prev = document.getElementById('editShowcaseFloat2Preview');
+    if (prev) prev.src = trimmed;
+  }
+}
+
+async function handleHeroShowcaseSave(event) {
+  event.preventDefault();
+  if (!isAdmin()) return;
+
+  const current = getEffectiveHeroShowcase();
+  const mainUrl = (document.getElementById('editShowcaseMainImg')?.value || '').trim();
+  const float1Url = (document.getElementById('editShowcaseFloat1Img')?.value || '').trim();
+  const float2Url = (document.getElementById('editShowcaseFloat2Img')?.value || '').trim();
+
+  const heroShowcase = {
+    mainImg: showcaseUploadedImages.main || mainUrl || current.mainImg,
+    priceStamp: (document.getElementById('editShowcasePriceStamp')?.value || '').trim() || DEFAULT_HERO_SHOWCASE.priceStamp,
+    dishCat: (document.getElementById('editShowcaseDishCat')?.value || '').trim() || DEFAULT_HERO_SHOWCASE.dishCat,
+    dishTitle: (document.getElementById('editShowcaseDishTitle')?.value || '').trim() || DEFAULT_HERO_SHOWCASE.dishTitle,
+    dishMeta: (document.getElementById('editShowcaseDishMeta')?.value || '').trim() || DEFAULT_HERO_SHOWCASE.dishMeta,
+    float1Img: showcaseUploadedImages.float1 || float1Url || current.float1Img,
+    float1Title: (document.getElementById('editShowcaseFloat1Title')?.value || '').trim() || DEFAULT_HERO_SHOWCASE.float1Title,
+    float1Sub: (document.getElementById('editShowcaseFloat1Sub')?.value || '').trim() || DEFAULT_HERO_SHOWCASE.float1Sub,
+    float2Img: showcaseUploadedImages.float2 || float2Url || current.float2Img,
+    float2Title: (document.getElementById('editShowcaseFloat2Title')?.value || '').trim() || DEFAULT_HERO_SHOWCASE.float2Title,
+    float2Sub: (document.getElementById('editShowcaseFloat2Sub')?.value || '').trim() || DEFAULT_HERO_SHOWCASE.float2Sub,
+    mascotBubble: (document.getElementById('editShowcaseMascotBubble')?.value || '').trim() || DEFAULT_HERO_SHOWCASE.mascotBubble,
+    customized: true
+  };
+
+  try {
+    if (window.FirestoreService?.isConfigured()) {
+      await window.FirestoreService.updateSiteSettings({ heroShowcase });
+    }
+    AppState.siteSettings = {
+      ...AppState.siteSettings,
+      heroShowcase
+    };
+    applyHeroShowcase();
+    populateAdminSiteTexts();
+    SoundFX.playWin();
+    showToast('บันทึกภาพและคำบรรยายโชว์เคสหน้าแรกเรียบร้อยแล้ว! 🖼️✨', 'success');
+  } catch (err) {
+    console.error('Save hero showcase error:', err);
+    showToast('บันทึกโชว์เคสไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
+}
+
+async function resetHeroShowcaseToDefault() {
+  if (!isAdmin()) return;
+  if (!confirm('ต้องการคืนค่ารูปภาพและคำบรรยายโชว์เคสหน้าแรกกลับเป็นค่าเริ่มต้นใช่หรือไม่?')) return;
+
+  const heroShowcase = { ...DEFAULT_HERO_SHOWCASE, customized: false };
+  showcaseUploadedImages = { main: '', float1: '', float2: '' };
+
+  try {
+    if (window.FirestoreService?.isConfigured()) {
+      await window.FirestoreService.updateSiteSettings({ heroShowcase });
+    }
+    AppState.siteSettings = {
+      ...AppState.siteSettings,
+      heroShowcase
+    };
+    applyHeroShowcase();
+    populateAdminSiteTexts();
+    showToast('คืนค่าเริ่มต้นให้การ์ดโชว์เคสหน้าแรกเรียบร้อยแล้ว 🔄', 'info');
+  } catch (err) {
+    console.error('Reset hero showcase error:', err);
+    showToast('คืนค่าไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
 }
 
 function populateAdminSiteTexts() {
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+  const settings = AppState.siteSettings || DEFAULT_SETTINGS;
   const tagline = document.getElementById('editTagline');
   const ticker = document.getElementById('editTicker');
   const banner = document.getElementById('editBannerText');
-  const googleClientIdInput = document.getElementById('adminGoogleClientIdInput');
 
   if (tagline) tagline.value = settings.tagline || '';
   if (ticker) ticker.value = settings.announcementTicker || '';
   if (banner) banner.value = settings.festivalBannerText || '';
-  if (googleClientIdInput) googleClientIdInput.value = settings.googleClientId || '';
+
+  // Populate Hero Showcase Customizer in News Tab
+  const sc = getEffectiveHeroShowcase();
+  showcaseUploadedImages = {
+    main: sc.mainImg && sc.mainImg.startsWith('data:') ? sc.mainImg : '',
+    float1: sc.float1Img && sc.float1Img.startsWith('data:') ? sc.float1Img : '',
+    float2: sc.float2Img && sc.float2Img.startsWith('data:') ? sc.float2Img : ''
+  };
+
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val || '';
+  };
+  const setSrc = (id, src) => {
+    const el = document.getElementById(id);
+    if (el && src) el.src = src;
+  };
+
+  setSrc('editShowcaseMainPreview', sc.mainImg);
+  setVal('editShowcaseMainImg', sc.mainImg && !sc.mainImg.startsWith('data:') ? sc.mainImg : '');
+  setVal('editShowcasePriceStamp', sc.priceStamp);
+  setVal('editShowcaseDishCat', sc.dishCat);
+  setVal('editShowcaseDishTitle', sc.dishTitle);
+  setVal('editShowcaseDishMeta', sc.dishMeta);
+
+  setSrc('editShowcaseFloat1Preview', sc.float1Img);
+  setVal('editShowcaseFloat1Img', sc.float1Img && !sc.float1Img.startsWith('data:') ? sc.float1Img : '');
+  setVal('editShowcaseFloat1Title', sc.float1Title);
+  setVal('editShowcaseFloat1Sub', sc.float1Sub);
+
+  setSrc('editShowcaseFloat2Preview', sc.float2Img);
+  setVal('editShowcaseFloat2Img', sc.float2Img && !sc.float2Img.startsWith('data:') ? sc.float2Img : '');
+  setVal('editShowcaseFloat2Title', sc.float2Title);
+  setVal('editShowcaseFloat2Sub', sc.float2Sub);
+
+  setVal('editShowcaseMascotBubble', sc.mascotBubble);
 }
 
-function handleSiteTextSave(event) {
+async function handleSiteTextSave(event) {
   event.preventDefault();
   if (!isAdmin()) return;
 
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  settings.tagline = document.getElementById('editTagline').value.trim();
-  settings.announcementTicker = document.getElementById('editTicker').value.trim();
-  settings.festivalBannerText = document.getElementById('editBannerText').value.trim();
+  const tagline = document.getElementById('editTagline').value.trim();
+  const announcementTicker = document.getElementById('editTicker').value.trim();
+  const festivalBannerText = document.getElementById('editBannerText').value.trim();
 
-  Store.set(STORAGE_KEYS.SETTINGS, settings);
-  applySiteSettings();
-  showToast('บันทึกข้อความหน้าเว็บไซต์เรียบร้อยแล้ว!', 'success');
+  try {
+    if (window.FirestoreService?.isConfigured()) {
+      await window.FirestoreService.updateSiteSettings({
+        tagline,
+        announcementTicker,
+        festivalBannerText
+      });
+    }
+    AppState.siteSettings = {
+      ...AppState.siteSettings,
+      tagline,
+      announcementTicker,
+      festivalBannerText
+    };
+    applySiteSettings();
+    showToast('บันทึกข้อความหน้าเว็บไซต์ลง Cloud Firestore เรียบร้อยแล้ว!', 'success');
+  } catch (err) {
+    console.error('Save site texts error:', err);
+    showToast('บันทึกข้อความหน้าเว็บไม่สำเร็จ: ' + (err?.message || ''), 'error');
+  }
 }
 
 function applySiteSettings() {
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+  const settings = AppState.siteSettings || DEFAULT_SETTINGS;
 
   const tickerText = document.getElementById('tickerText');
   if (tickerText) tickerText.textContent = settings.announcementTicker || '';
@@ -3785,12 +5070,8 @@ function applySiteSettings() {
   if (heroFestivalBadge && settings.festivalBannerText) {
     heroFestivalBadge.textContent = settings.festivalBannerText;
   }
-}
 
-function resetAllDemoData() {
-  if (!confirm('⚠️ ยืนยันการคืนค่าข้อมูลเริ่มต้นของระบบ SPU ทั้งหมด? (ข้อมูลทดสอบใหม่จะถูกรีเซ็ต)')) return;
-  Store.reset();
-  location.reload();
+  applyHeroShowcase();
 }
 
 // ============================================================================
@@ -3817,7 +5098,7 @@ function setupSecretAdminTriggers() {
   // 2. Secret Easter Egg: Click Logo 5 times quickly within 2.5 seconds
   const logo = document.querySelector('.brand-logo');
   if (logo) {
-    logo.addEventListener('click', (e) => {
+    logo.addEventListener('click', () => {
       secretLogoClicks++;
       clearTimeout(secretLogoTimer);
       secretLogoTimer = setTimeout(() => {
@@ -3853,38 +5134,176 @@ function setupSecretAdminTriggers() {
 }
 
 // ============================================================================
-// 16. App Initialization on DOM Ready
+// 16. App Initialization & Real-Time Firestore Subscriptions
 // ============================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
-  // 0. Track Visitor Analytics (Visitor Counter)
+let firebaseSyncStarted = false;
+
+function startFirebaseAppSync() {
+  if (firebaseSyncStarted) return;
+  if (!window.FIREBASE_BRIDGE_LOADED || !window.AuthService || !window.FirestoreService) return;
+
+  firebaseSyncStarted = true;
+
+  if (!window.FirestoreService.isConfigured()) {
+    AppState.restaurants = mergeRestaurantsWithCurated([]);
+    AppState.restaurantsLoaded = true;
+    AppState.reviewsLoaded = true;
+    AppState.newsLoaded = true;
+    filterRestaurants();
+    initWheel();
+    if (typeof renderBudgetComboIdleState === 'function') renderBudgetComboIdleState();
+    renderNewsGrid();
+    renderLeaderboard();
+    renderAdminStats();
+    renderFirebaseStatusBox();
+    console.warn('⚠️ Firebase config placeholders detected. Please update js/firebase-config.js.');
+    return;
+  }
+
+  // 1. Track real visitor analytics in Firestore
   trackVisitorHit();
 
-  // 1. Init Theme & Dark mode
-  const settings = Store.get(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  applyTheme(settings.activeTheme || 'spu-classic');
+  // 2. Real-time Firebase Authentication & user profile state
+  const unsubAuth = window.AuthService.onAuthChange((profile) => {
+    setCurrentUser(profile);
+    renderBadgesShowcase();
+    maybeSeedCuratedRestaurantsToFirestore();
+    if (document.getElementById('adminModal')?.classList.contains('active')) {
+      renderAdminStats();
+      renderAdminUsers();
+    }
+  });
+  AppState.unsubscribers.push(unsubAuth);
+
+  // 3. Real-time Restaurants listener
+  const unsubRestaurants = window.FirestoreService.subscribeRestaurants(
+    (list) => {
+      AppState.firestoreRestaurants = list;
+      AppState.restaurants = mergeRestaurantsWithCurated(list);
+      AppState.restaurantsLoaded = true;
+      filterRestaurants();
+      initWheel();
+      if (typeof renderBudgetComboIdleState === 'function') renderBudgetComboIdleState();
+      renderAdminRestaurantsTable();
+      renderAdminStats();
+      maybeSeedCuratedRestaurantsToFirestore();
+    },
+    (err) => {
+      console.warn('Firestore restaurants listener error:', err);
+      AppState.restaurants = mergeRestaurantsWithCurated([]);
+      AppState.restaurantsLoaded = true;
+      filterRestaurants();
+      initWheel();
+    }
+  );
+  AppState.unsubscribers.push(unsubRestaurants);
+
+  // 4. Real-time Reviews listener
+  const unsubReviews = window.FirestoreService.subscribeReviews(
+    (list) => {
+      AppState.reviews = list;
+      AppState.reviewsLoaded = true;
+      filterRestaurants();
+      renderLeaderboard();
+      renderAdminReviews();
+      renderAdminStats();
+    },
+    (err) => {
+      console.warn('Firestore reviews listener error:', err);
+      AppState.reviewsLoaded = true;
+    }
+  );
+  AppState.unsubscribers.push(unsubReviews);
+
+  // 5. Real-time News listener
+  const unsubNews = window.FirestoreService.subscribeNews((list) => {
+    AppState.news = list;
+    AppState.newsLoaded = true;
+    renderNewsGrid();
+    renderAdminNews();
+    renderAdminStats();
+  });
+  AppState.unsubscribers.push(unsubNews);
+
+  // 6. Real-time Users & Leaderboard listener
+  const unsubUsers = window.FirestoreService.subscribeUsers((list) => {
+    AppState.users = list;
+    renderLeaderboard();
+    renderAdminUsers();
+    renderAdminStats();
+  });
+  AppState.unsubscribers.push(unsubUsers);
+
+  // 7. Real-time Site Settings & Festival Theme listener
+  const unsubSettings = window.FirestoreService.subscribeSiteSettings((settings) => {
+    if (settings) {
+      AppState.siteSettings = { ...DEFAULT_SETTINGS, ...settings };
+      applyTheme(AppState.siteSettings.activeTheme || 'spu-classic');
+      applySiteSettings();
+      populateAdminSiteTexts();
+      renderAdminThemePicker();
+      if (AppState.restaurantsLoaded) {
+        AppState.restaurants = mergeRestaurantsWithCurated(AppState.firestoreRestaurants);
+        filterRestaurants();
+        initWheel();
+        renderAdminRestaurantsTable();
+        renderAdminStats();
+      }
+      maybeSeedCuratedRestaurantsToFirestore();
+    }
+  });
+  AppState.unsubscribers.push(unsubSettings);
+
+  // 8. Real-time Visitor Stats listener
+  const unsubStats = window.FirestoreService.subscribeStats((stats) => {
+    if (stats) {
+      AppState.stats = stats;
+      AppState.statsLoaded = true;
+      updatePublicVisitorUI(stats);
+      renderAdminStats();
+    }
+  });
+  AppState.unsubscribers.push(unsubStats);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // 1. Init Theme & Dark mode defaults
+  applyTheme(AppState.siteSettings.activeTheme || 'spu-classic');
   initDarkMode();
   applySiteSettings();
 
-  // 2. Populate Dropdowns & Filter
+  // 2. Populate Dropdowns & Initial UI states
+  AppState.restaurants = mergeRestaurantsWithCurated([]);
   populateFilterDropdowns();
   filterRestaurants();
-
-  // 3. Render Navigation User & Google Identity
   renderNavUser();
   initGoogleSignIn();
-
-  // 4. Init Mini-Games & Daily Check-In
   initWheel();
+  if (typeof renderBudgetComboIdleState === 'function') renderBudgetComboIdleState();
   renderDailyCheckIn();
-
-  // 5. Render News & Gamification
+  scheduleMidnightCheckInRefresh();
   renderNewsGrid();
   renderLeaderboard();
   renderBadgesShowcase();
+  updatePublicVisitorUI(AppState.stats);
 
-  // 6. Setup Secret Admin Access Triggers
+  // 3. Setup Secret Admin Access Triggers
   setupSecretAdminTriggers();
 
-  console.log("จานเด็ด SPU พร้อมทำงานเต็มรูปแบบ 🚀");
+  // 4. Connect to Firebase Bridge when loaded
+  if (window.FIREBASE_BRIDGE_LOADED) {
+    startFirebaseAppSync();
+  } else {
+    window.addEventListener('firebase-bridge-ready', startFirebaseAppSync, { once: true });
+    if (window.location.protocol === 'file:') {
+      setTimeout(() => {
+        if (!window.FIREBASE_BRIDGE_LOADED) {
+          showToast('⚠️ เปิดไฟล์ผ่าน file:/// ไม่สามารถโหลด Firebase ES Module ได้ กรุณาเปิดผ่าน start-server.bat (localhost:3000) หรือ GitHub Pages', 'warning');
+        }
+      }, 1500);
+    }
+  }
+
+  console.log("จานเด็ด SPU พร้อมเชื่อมต่อ Cloud Firestore & Firebase Auth 🚀");
 });

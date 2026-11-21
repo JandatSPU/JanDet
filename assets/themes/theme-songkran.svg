@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260" fill="none">
+  <defs>
+    <linearGradient id="bgSongkran" x1="0" y1="0" x2="800" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0369a1"/>
+      <stop offset="50%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="260" rx="22" fill="url(#bgSongkran)"/>
+
+  <!-- Water Waves & Splashes -->
+  <path d="M0 198 Q 160 176 320 198 T 640 194 T 800 198 V 260 H 0 Z" fill="#38bdf8" fill-opacity="0.45"/>
+  <path d="M0 218 Q 200 198 400 218 T 800 212 V 260 H 0 Z" fill="#bae6fd" fill-opacity="0.5"/>
+
+  <!-- Water Droplets & Dok Koon (Golden Shower Flowers) -->
+  <g fill="#fde047">
+    <circle cx="95" cy="44" r="10"/>
+    <circle cx="112" cy="52" r="9"/>
+    <circle cx="88" cy="60" r="8"/>
+    <circle cx="705" cy="46" r="10"/>
+    <circle cx="688" cy="54" r="9"/>
+    <circle cx="716" cy="62" r="8"/>
+  </g>
+
+  <!-- Left Silver Bowl (ขันน้ำสงกรานต์) & Floating Flowers -->
+  <g transform="translate(65, 95)">
+    <!-- Water Splash Arcs -->
+    <path d="M35 38 Q 15 8 48 16" stroke="#e0f2fe" stroke-width="5" stroke-linecap="round"/>
+    <path d="M95 38 Q 115 8 82 16" stroke="#e0f2fe" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="22" cy="18" r="6" fill="#e0f2fe"/>
+    <circle cx="108" cy="18" r="6" fill="#e0f2fe"/>
+    <!-- Silver Bowl -->
+    <path d="M18 55 H112 C116 98 92 118 65 118 C38 118 14 98 18 55 Z" fill="#e2e8f0" stroke="#ffffff" stroke-width="3"/>
+    <ellipse cx="65" cy="55" rx="47" ry="13" fill="#38bdf8" stroke="#ffffff" stroke-width="2.5"/>
+    <!-- Floating Jasmine & Rose Petals -->
+    <circle cx="52" cy="54" r="6" fill="#fb7185"/>
+    <circle cx="78" cy="56" r="6" fill="#fde047"/>
+  </g>
+
+  <!-- Right Mango Sticky Rice & Summer Shaved Ice (บิงซู/น้ำแข็งไส) -->
+  <g transform="translate(585, 86)">
+    <ellipse cx="75" cy="106" rx="64" ry="26" fill="#ffffff" stroke="#fde047" stroke-width="3.5"/>
+    <!-- Sticky Rice & Golden Mango -->
+    <ellipse cx="55" cy="98" rx="26" ry="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+    <ellipse cx="92" cy="98" rx="28" ry="17" fill="#facc15" stroke="#eab308" stroke-width="2"/>
+    <path d="M42 94 Q 55 88 68 94" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+    <!-- Mint Leaf -->
+    <circle cx="74" cy="84" r="6" fill="#22c55e"/>
+  </g>
+
+  <!-- Center Festival Title -->
+  <g transform="translate(400, 128)" text-anchor="middle">
+    <rect x="-170" y="-54" width="340" height="32" rx="16" fill="#0369a1" stroke="#fde047" stroke-width="1.5"/>
+    <text x="0" y="-33" fill="#fef08a" font-family="Mitr, Prompt, sans-serif" font-size="14" font-weight="600" letter-spacing="1">💦 SONGKRAN SUMMER SPLASH</text>
+    <text x="0" y="8" fill="#ffffff" font-family="Mitr, Prompt, sans-serif" font-size="33" font-weight="700">เทศกาลสงกรานต์ SPU</text>
+    <text x="0" y="38" fill="#e0f2fe" font-family="Prompt, sans-serif" font-size="15" font-weight="500">สาดความสดชื่นรับซัมเมอร์ รวมเมนูคลายร้อนและเครื่องดื่มเย็นฉ่ำ</text>
+  </g>
+</svg>

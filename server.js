@@ -63,13 +63,35 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    // 2. Static File Serving
+    // 2. Static File Serving (Block private/backend/test files)
     if (pathname === '/') {
       pathname = '/index.html';
     }
 
-    const safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
-    const filePath = path.join(__dirname, safePath);
+    const decodedPath = decodeURIComponent(pathname);
+    const normalizedRel = path.normalize(decodedPath).replace(/^(\.\.[\/\\])+/, '');
+    const lowerRel = normalizedRel.replace(/\\/g, '/').toLowerCase();
+    const blockedPrefixes = ['/server/', '/tests/', '/node_modules/', '/.'];
+    const blockedExact = ['/server.js', '/package.json', '/package-lock.json', '/firestore.rules', '/start-server.bat'];
+    if (
+      blockedPrefixes.some(p => lowerRel.startsWith(p) || lowerRel.includes('/.')) ||
+      blockedExact.includes(lowerRel) ||
+      lowerRel.endsWith('.bat')
+    ) {
+      res.statusCode = 403;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ status: 'error', message: 'Forbidden' }));
+      return;
+    }
+
+    const rootDir = path.resolve(__dirname);
+    const filePath = path.resolve(rootDir, normalizedRel.replace(/^[\/\\]+/, ''));
+    if (!filePath.startsWith(rootDir + path.sep)) {
+      res.statusCode = 403;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ status: 'error', message: 'Forbidden' }));
+      return;
+    }
 
     fs.stat(filePath, (err, stats) => {
       if (err || !stats.isFile()) {

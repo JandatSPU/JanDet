@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ตรวจสอบว่าผู้ใช้เข้าสู่ระบบแล้วหรือยัง
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // ตรวจสอบว่าเป็นเจ้าของข้อมูล (UID ตรงกับ request.auth.uid)
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ตรวจสอบสิทธิ์แอดมินจากเอกสารใน collection users เท่านั้น
+    function isAdmin() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // 1. Users Collection (ข้อมูลโปรไฟล์สมาชิก - ห้ามเก็บรหัสผ่านเด็ดขาด)
+    match /users/{userId} {
+      // เปิดให้อ่านโปรไฟล์สาธารณะเพื่อแสดงบนตารางอันดับและรีวิว
+      allow read: if true;
+
+      // สร้างบัญชีได้เฉพาะเจ้าของ UID และต้องมี role เป็น 'user' เท่านั้น (ห้ามสมัครเป็น admin เอง)
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'user'
+        && !('password' in request.resource.data);
+
+      // แก้ไขข้อมูลตัวเองได้ (เช่น อัปเดตสตรีค, กรอบ, ฉายา, ร้านโปรด, รูปโปรไฟล์)
+      // แต่ผู้ใช้ทั่วไปห้ามเปลี่ยน role ของตัวเองให้เป็น admin เด็ดขาด!
+      // เฉพาะ admin เท่านั้นที่แก้ไข role หรือจัดการสมาชิกคนอื่นได้
+      allow update: if !('password' in request.resource.data) && (
+        isAdmin() || (
+          isOwner(userId)
+          && request.resource.data.role == resource.data.role
+          && (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid)
+        )
+      );
+
+      // เฉพาะแอดมินเท่านั้นที่ลบโปรไฟล์สมาชิกได้
+      allow delete: if isAdmin();
+    }
+
+    // 2. Restaurants Collection (ร้านอาหารและเมนูแนะนำ)
+    match /restaurants/{restaurantId} {
+      // ใครก็ดูร้านอาหารและเมนูได้โดยไม่ต้องล็อกอิน
+      allow read: if true;
+
+      // เฉพาะแอดมินเท่านั้นที่เพิ่ม แก้ไข หรือลบร้านและเมนูได้
+      allow write: if isAdmin();
+    }
+
+    // 3. Reviews Collection (1 รีวิว ต่อ 1 ร้าน ต่อ 1 ผู้ใช้: docId = restaurantId_userId)
+    match /reviews/{reviewId} {
+      // ใครก็ดูรีวิวได้โดยไม่ต้องล็อกอิน
+      allow read: if true;
+
+      // ต้องล็อกอินจึงจะสร้างรีวิวได้ และบังคับ ID ให้ตรงกับ restaurantId_userId เพื่อจำกัด 1 รีวิวต่อร้านต่อคน
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.restaurantId is string
+        && reviewId == (request.resource.data.restaurantId + '_' + request.auth.uid)
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+
+      // เจ้าของรีวิวแก้ไขข้อความ/คะแนนตัวเองได้, ผู้ใช้ที่ล็อกอินกดโหวตมีประโยชน์/รายงานได้, แอดมินจัดการได้ทั้งหมด
+      allow update: if isAdmin()
+        || (
+          isAuthenticated()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.rating >= 1
+          && request.resource.data.rating <= 5
+        )
+        || (
+          isAuthenticated()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['helpfulCount', 'helpfulBy', 'reported'])
+        );
+
+      // เจ้าของรีวิวลบรีวิวของตัวเองได้ หรือแอดมินลบรีวิวใดก็ได้
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    // 4. Checkins Collection (บันทึกการเช็กอินรายวัน: docId = userId_YYYY-MM-DD)
+    match /checkins/{checkinId} {
+      allow get: if isAuthenticated() && (checkinId.split('_')[0] == request.auth.uid || isAdmin());
+      allow list: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.date is string
+        && checkinId == (request.auth.uid + '_' + request.resource.data.date);
+
+      allow update, delete: if isAdmin();
+    }
+
+    // 5. News Collection (ข่าวสารและโปรโมชั่น)
+    match /news/{newsId} {
+      // ใครก็อ่านข่าวได้โดยไม่ต้องล็อกอิน
+      allow read: if true;
+
+      // เฉพาะแอดมินเท่านั้นที่เพิ่ม แก้ไข หรือลบข่าวสารได้
+      allow write: if isAdmin();
+    }
+
+    // 6. Site Settings Collection (ธีมเทศกาล, สโลแกน, แถบประกาศ, แบนเนอร์)
+    match /siteSettings/{settingId} {
+      // ใครก็อ่านการตั้งค่าธีมและข้อความเว็บได้
+      allow read: if true;
+
+      // เฉพาะแอดมินเท่านั้นที่เปลี่ยนธีมและแก้ไขข้อความหน้าเว็บได้
+      allow write: if isAdmin();
+    }
+
+    // 7. Stats Collection (สถิติยอดเข้าชมเว็บไซต์)
+    match /stats/{statId} {
+      allow read: if true;
+
+      // อนุญาตให้นับสถิติผู้เข้าชมได้ (จำกัดเฉพาะฟิลด์สถิติเท่านั้น)
+      allow create, update: if request.resource.data.keys().hasOnly(['pageViews', 'uniqueVisitors', 'dailyVisits', 'lastVisit']);
+      allow delete: if isAdmin();
+    }
+  }
+}

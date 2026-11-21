@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260" fill="none">
+  <defs>
+    <linearGradient id="bgClassic" x1="0" y1="0" x2="800" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="45%" stop-color="#881337"/>
+      <stop offset="100%" stop-color="#e11d48"/>
+    </linearGradient>
+    <linearGradient id="pinkGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fecdd3"/>
+      <stop offset="100%" stop-color="#fb7185"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="260" rx="22" fill="url(#bgClassic)"/>
+
+  <!-- SPU Pink & Dark Ambient Circles -->
+  <circle cx="680" cy="60" r="110" fill="#f43f5e" fill-opacity="0.22"/>
+  <circle cx="140" cy="220" r="130" fill="#e11d48" fill-opacity="0.20"/>
+
+  <!-- Top SPU Bistro Awning Stripes (ชมพู - ดำ ศรีปทุม) -->
+  <g opacity="0.95">
+    <path d="M0 0H80V26C80 37 62 46 40 46C18 46 0 37 0 26V0Z" fill="#e11d48"/>
+    <path d="M80 0H160V26C160 37 142 46 120 46C98 46 80 37 80 26V0Z" fill="#0f172a"/>
+    <path d="M160 0H240V26C240 37 222 46 200 46C178 46 160 37 160 26V0Z" fill="#e11d48"/>
+    <path d="M240 0H320V26C320 37 302 46 280 46C258 46 240 37 240 26V0Z" fill="#0f172a"/>
+    <path d="M320 0H400V26C400 37 382 46 360 46C338 46 320 37 320 26V0Z" fill="#e11d48"/>
+    <path d="M400 0H480V26C480 37 462 46 440 46C418 46 400 37 400 26V0Z" fill="#0f172a"/>
+    <path d="M480 0H560V26C560 37 542 46 520 46C498 46 480 37 480 26V0Z" fill="#e11d48"/>
+    <path d="M560 0H640V26C640 37 622 46 600 46C578 46 560 37 560 26V0Z" fill="#0f172a"/>
+    <path d="M640 0H720V26C720 37 702 46 680 46C658 46 640 37 640 26V0Z" fill="#e11d48"/>
+    <path d="M720 0H800V26C800 37 782 46 760 46C738 46 720 37 720 26V0Z" fill="#0f172a"/>
+  </g>
+
+  <!-- Bistro String Lights -->
+  <path d="M40 46 Q 220 95 400 52 Q 580 95 760 46" stroke="#fecdd3" stroke-width="2" fill="none" stroke-dasharray="4 4"/>
+  <circle cx="130" cy="68" r="6" fill="#fecdd3"/>
+  <circle cx="230" cy="72" r="6" fill="#fecdd3"/>
+  <circle cx="330" cy="62" r="6" fill="#fecdd3"/>
+  <circle cx="470" cy="64" r="6" fill="#fecdd3"/>
+  <circle cx="580" cy="72" r="6" fill="#fecdd3"/>
+  <circle cx="680" cy="65" r="6" fill="#fecdd3"/>
+
+  <!-- Left Food Illustration: Sizzling Rice Plate with Sunny-Side Egg -->
+  <g transform="translate(55, 88)">
+    <ellipse cx="95" cy="95" rx="82" ry="48" fill="#fff1f2" stroke="#e11d48" stroke-width="4"/>
+    <ellipse cx="95" cy="92" rx="66" ry="36" fill="#ffe4e6" opacity="0.6"/>
+    <!-- Steaming Rice & Basil Pork -->
+    <ellipse cx="75" cy="90" rx="36" ry="24" fill="#881337"/>
+    <circle cx="65" cy="84" r="6" fill="#2b7a4b"/>
+    <circle cx="85" cy="95" r="7" fill="#2b7a4b"/>
+    <path d="M58 95 L72 82" stroke="#e11d48" stroke-width="4" stroke-linecap="round"/>
+    <!-- Sunny-Side Up Egg -->
+    <ellipse cx="115" cy="88" rx="30" ry="22" fill="#ffffff" stroke="#fecdd3" stroke-width="2"/>
+    <circle cx="117" cy="86" r="11" fill="#f59e0b"/>
+    <circle cx="114" cy="83" r="3.5" fill="#fef08a"/>
+    <!-- Steam Waves -->
+    <path d="M72 48 Q 65 34 75 22" stroke="#fecdd3" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    <path d="M98 44 Q 91 30 101 18" stroke="#fecdd3" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    <path d="M122 50 Q 115 36 125 24" stroke="#fecdd3" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+  </g>
+
+  <!-- Right Food Illustration: Ramen Bowl & Boba Tea -->
+  <g transform="translate(565, 82)">
+    <!-- Noodle Bowl -->
+    <path d="M25 85 H135 C135 125 110 145 80 145 C50 145 25 125 25 85 Z" fill="#e11d48" stroke="#fecdd3" stroke-width="4"/>
+    <ellipse cx="80" cy="85" rx="55" ry="16" fill="#fff1f2" stroke="#fda4af" stroke-width="3"/>
+    <circle cx="62" cy="84" r="10" fill="#ffffff"/>
+    <circle cx="62" cy="84" r="5" fill="#e11d48"/>
+    <circle cx="96" cy="85" r="9" fill="#2b7a4b"/>
+    <!-- Chopsticks -->
+    <line x1="45" y1="52" x2="142" y2="32" stroke="#fecdd3" stroke-width="4" stroke-linecap="round"/>
+    <line x1="45" y1="60" x2="144" y2="45" stroke="#fecdd3" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- Thai Tea Cup -->
+    <g transform="translate(135, 35)">
+      <line x1="28" y1="-15" x2="22" y2="25" stroke="#fecdd3" stroke-width="5" stroke-linecap="round"/>
+      <path d="M6 20 H44 L38 95 H12 L6 20 Z" fill="#fb7185" stroke="#ffffff" stroke-width="3"/>
+      <path d="M4 20 Q 25 2 46 20 Z" fill="#ffffff" opacity="0.9"/>
+      <circle cx="18" cy="84" r="4" fill="#0f172a"/>
+      <circle cx="27" cy="86" r="4" fill="#0f172a"/>
+      <circle cx="33" cy="82" r="4" fill="#0f172a"/>
+    </g>
+  </g>
+
+  <!-- Center Typography Badge -->
+  <g transform="translate(400, 142)" text-anchor="middle">
+    <rect x="-155" y="-54" width="310" height="32" rx="16" fill="#fff1f2" fill-opacity="0.2" stroke="#fecdd3" stroke-width="1.5"/>
+    <text x="0" y="-33" fill="#fecdd3" font-family="Mitr, Prompt, sans-serif" font-size="14" font-weight="600" letter-spacing="1">🍽️ SPU PINK &amp; BLACK CLASSIC</text>
+    <text x="0" y="8" fill="#ffffff" font-family="Mitr, Prompt, sans-serif" font-size="34" font-weight="700">จานเด็ด SPU · Classic</text>
+    <text x="0" y="38" fill="#fecdd3" font-family="Prompt, sans-serif" font-size="15" font-weight="500">บรรยากาศชมพู-ดำ มหาวิทยาลัยศรีปทุม หอมกรุ่นทุกมื้ออร่อยรอบรั้วแคมปัส</text>
+  </g>
+</svg>

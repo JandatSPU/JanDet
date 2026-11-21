@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shFire" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#dc2626" flood-opacity="0.45"/>
+    </filter>
+    <linearGradient id="lavaRing" x1="100" y1="180" x2="100" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#991b1b"/>
+      <stop offset="50%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shFire)">
+    <circle cx="100" cy="100" r="70" stroke="url(#lavaRing)" stroke-width="9" fill="none"/>
+    <circle cx="100" cy="100" r="74.5" stroke="#450a0a" stroke-width="1.8" fill="none"/>
+    <circle cx="100" cy="100" r="65.5" stroke="#fef08a" stroke-width="1.5" stroke-dasharray="14 8" fill="none"/>
+    <path d="M32 118 C16 98, 18 70, 32 58 C24 74, 34 80, 38 68 C32 50, 42 30, 58 24 C50 38, 56 46, 64 38 L52 60 Z" fill="#ef4444" stroke="#7f1d1d" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M34 110 C24 94, 26 74, 36 66 C32 76, 40 78, 44 68 C40 54, 46 40, 56 34 C52 44, 56 50, 48 64 Z" fill="#f59e0b"/>
+    <path d="M168 118 C184 98, 182 70, 168 58 C176 74, 166 80, 162 68 C168 50, 158 30, 142 24 C150 38, 144 46, 136 38 L148 60 Z" fill="#ef4444" stroke="#7f1d1d" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M166 110 C176 94, 174 74, 164 66 C168 76, 160 78, 156 68 C160 54, 154 40, 144 34 C148 44, 144 50, 152 64 Z" fill="#f59e0b"/>
+    <g transform="translate(100, 171)">
+      <path d="M0 -18 C-14 -6, -16 10, 0 15 C16 10, 14 -6, 0 -18 Z" fill="#ef4444" stroke="#7f1d1d" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M0 -10 C-8 -2, -9 8, 0 12 C9 8, 8 -2, 0 -10 Z" fill="#f59e0b"/>
+      <path d="M0 -3 C-4 2, -4 8, 0 10 C4 8, 4 2, 0 -3 Z" fill="#fef08a"/>
+    </g>
+  </g>
+</svg>

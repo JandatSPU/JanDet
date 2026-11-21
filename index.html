@@ -7,12 +7,9 @@
   
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/icons/logo.png">
-  
-  <!-- Google Identity Services (GIS) Client Library for Google Cloud Console OAuth 2.0 -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20261120_6">
 </head>
 <body>
 
@@ -22,12 +19,12 @@
   <aside class="top-ticker" id="topTickerBar" aria-label="แถบประกาศเทศกาล">
     <div class="ticker-scroll-track">
       <div class="ticker-content" id="tickerText">
-        📢 ยินดีต้อนรับสู่ 'จานเด็ด SPU' เพื่อนคู่คิดมื้อเที่ยงของเด็กศรีปทุม! ล็อกอินต่อเนื่องครบ 7 วัน รับรางวัลใหญ่ประจำสัปดาห์ 🍗✨
+        ยินดีต้อนรับสู่ จานเด็ด SPU · แหล่งรวมร้านอร่อยและสุ่มมื้อเที่ยงของเด็กศรีปทุม · เช็กอินต่อเนื่องครบ 7 วัน รับรางวัลใหญ่ประจำสัปดาห์
       </div>
     </div>
     <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; position: relative; z-index: 2;">
       <span class="theme-pill" id="currentThemePill">
-        <span id="themePillIcon">💖</span> <span id="themePillName">SPU Classic</span>
+        <span id="themePillIcon">🍽️</span> <span id="themePillName">Classic</span>
       </span>
     </div>
   </aside>
@@ -38,22 +35,22 @@
   <header class="site-navbar">
     <div class="container nav-inner">
       <!-- Logo -->
-      <a href="#" class="brand-logo" onclick="window.scrollTo({top: 0, behavior: 'smooth'}); return false;">
-        <img src="assets/images/spu-chef-logo.png" alt="โลโก้จานเด็ด SPU" class="brand-logo-img" id="brandLogoImg">
+      <a href="#restaurantsSection" class="brand-logo" onclick="switchAppView('restaurants'); return false;">
+        <img src="assets/images/spu-chef-logo.png?v=20261118_1" alt="โลโก้จานเด็ด SPU" class="brand-logo-img" id="brandLogoImg">
         <div>
           <div class="brand-title">จานเด็ด <span class="brand-spu">SPU</span></div>
           <div class="brand-tag">Food Review & Randomizer</div>
         </div>
       </a>
 
-      <!-- Nav Links -->
+      <!-- Nav Links (Multi-View Switcher) -->
       <nav aria-label="เมนูหลัก">
-        <ul class="nav-links">
-          <li><a href="#restaurantsSection" class="nav-link active">🍽️ ร้านอาหาร</a></li>
-          <li><a href="#rouletteSection" class="nav-link">🎡 วงล้อสุ่มเมนู</a></li>
-          <li><a href="#dailyCheckInSection" class="nav-link">🗓️ ล็อกอินรายสัปดาห์</a></li>
-          <li><a href="#newsSection" class="nav-link">📰 ข่าว & โปร</a></li>
-          <li><a href="#leaderboardSection" class="nav-link">🏆 อันดับนักชิม</a></li>
+        <ul class="nav-links" id="mainNavLinks">
+          <li><a href="#restaurantsSection" data-view="restaurants" class="nav-link active" onclick="switchAppView('restaurants'); return false;">🍽️ ร้านอาหาร</a></li>
+          <li><a href="#rouletteSection" data-view="roulette" class="nav-link" onclick="switchAppView('roulette'); return false;">🎡 วงล้อสุ่มเมนู</a></li>
+          <li><a href="#dailyCheckInSection" data-view="checkin" class="nav-link" onclick="switchAppView('checkin'); return false;">🗓️ เช็กอิน & กรอบรูป</a></li>
+          <li><a href="#newsSection" data-view="news" class="nav-link" onclick="switchAppView('news'); return false;">📢 ข่าว & โปรโมชั่น</a></li>
+          <li><a href="#leaderboardSection" data-view="leaderboard" class="nav-link" onclick="switchAppView('leaderboard'); return false;">🏆 อันดับนักชิม</a></li>
         </ul>
       </nav>
 
@@ -75,7 +72,7 @@
   <!-- ==========================================
        Hero Section & Advanced Search Bar
        ========================================== -->
-  <section class="hero-section" id="heroSection">
+  <section class="hero-section app-view-section active-view" id="heroSection" data-view-group="restaurants">
     <div class="hero-bg-shapes">
       <div class="shape shape-1"></div>
       <div class="shape shape-2"></div>
@@ -86,42 +83,101 @@
     <div class="festival-particles" id="festivalParticles"></div>
 
     <div class="container hero-container">
-      <div class="hero-badge" id="heroFestivalBadge">
-        ✨ เพื่อนแท้มื้อเที่ยงของเด็ก ม.ศรีปทุม
-      </div>
-      <h1 class="hero-title" id="heroMainTitle">
-        เที่ยงนี้กินอะไรดี? <br>
-        ค้นหา <span class="hero-highlight">จานเด็ด SPU</span> โดนใจคุณ
-      </h1>
-      <p class="hero-desc" id="heroDescText">
-        ระบบค้นหา แนะนำร้านอาหาร รีวิวจากเด็กศรีปทุมตัวจริง พร้อมวงล้อสุ่มเมนูแก้ปัญหาคิดไม่ออก และระบบล็อกอินรายสัปดาห์สะสมฉายาและกรอบโปรไฟล์!
-      </p>
+      <div class="hero-split-layout">
+        <!-- Left Column: Food Review Headline & Canteen Quick Guide -->
+        <div class="hero-copy-col">
+          <div class="hero-badge" id="heroFestivalBadge">
+            <span class="hero-badge-dot"></span> 🍛 ลายแทงความอร่อย ม.ศรีปทุม · รีวิวจากนักศึกษาตัวจริง
+          </div>
+          <h1 class="hero-title" id="heroMainTitle">
+            เที่ยงนี้กินอะไรดี? <br>
+            ค้นหา <span class="hero-highlight">จานเด็ด SPU</span> โดนใจคุณ
+          </h1>
+          <p class="hero-desc" id="heroDescText">
+            รวมรีวิวร้านอร่อย เมนูแนะนำ และราคาจริง ทั้งในโรงเย็น อาคาร 10 (ชั้น 1–3) และโรงร้อนหลังอาคาร 5 พร้อมวงล้อสุ่มมื้อเที่ยงเมื่อคิดเมนูไม่ออก
+          </p>
 
-      <div class="hero-actions">
-        <a href="#rouletteSection" class="btn btn-primary btn-lg">
-          🎡 หมุนวงล้อสุ่มอาหารเลย!
-        </a>
-        <a href="#dailyCheckInSection" class="btn btn-outline btn-lg">
-          🗓️ ล็อกอินรายสัปดาห์รับรางวัลใหญ่
-        </a>
+          <!-- Quick Campus Canteen Location Switcher -->
+          <div class="canteen-quick-pills" aria-label="เลือกพิกัดโรงอาหารด่วน">
+            <span class="canteen-pill-label">📍 พิกัดโรงอาหาร:</span>
+            <button type="button" class="canteen-pill active" onclick="quickSelectCanteenLocation('all', this)">🍽️ ทั้งหมดใน SPU</button>
+            <button type="button" class="canteen-pill" onclick="quickSelectCanteenLocation('โรงเย็น อาคาร 10 (ชั้น 1)', this)">❄️ โรงเย็น ตึก 10</button>
+            <button type="button" class="canteen-pill" onclick="quickSelectCanteenLocation('โรงร้อน (หลังอาคาร 5)', this)">🔥 โรงร้อน หลังตึก 5</button>
+          </div>
+
+          <div class="hero-actions">
+            <a href="#rouletteSection" class="btn btn-primary btn-lg" onclick="switchAppView('roulette'); return false;">
+              🎡 สุ่มเมนูมื้อนี้เลย
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 4px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a href="#budgetComboSectionCard" class="btn btn-outline btn-lg" onclick="openBudgetComboPlanner(); return false;">
+              🍱 จัดเซตตามงบ
+            </a>
+            <a href="#dailyCheckInSection" class="btn btn-outline btn-lg" onclick="switchAppView('checkin'); return false;">
+              🗓️ เช็กอิน & สะสมกรอบรูป
+            </a>
+          </div>
+        </div>
+
+        <!-- Right Column: Appetizing Culinary Tasting Board Collage -->
+        <div class="hero-tasting-board" aria-hidden="true">
+          <div class="tasting-main-card">
+            <div class="tasting-recommend-badge" id="heroTastingRecommendBadge">⭐ แนะนำ</div>
+            <div class="tasting-main-inner">
+              <img src="https://images.unsplash.com/photo-1562565652-a0d8f0c59eb4?w=640&auto=format&fit=crop&q=80" alt="" class="tasting-main-img" id="heroTastingMainImg">
+              <div class="tasting-price-stamp" id="heroTastingPriceStamp">🔥 ~45-60฿</div>
+              <div class="tasting-main-overlay">
+                <span class="tasting-dish-cat" id="heroTastingDishCat">🍳 จานด่วนยอดฮิตเด็ก SPU</span>
+                <div class="tasting-dish-title" id="heroTastingDishTitle">กะเพราหมูกรอบไข่ดาวเยิ้ม & อาหารตามสั่ง</div>
+                <div class="tasting-dish-meta" id="heroTastingDishMeta">★ 4.9 · รีวิวแน่น · โรงร้อน & โรงเย็น</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tasting-float-card float-top-left">
+            <img src="https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=240&auto=format&fit=crop&q=80" alt="" class="tasting-mini-img" id="heroFloat1Img">
+            <div>
+              <div class="tasting-mini-title" id="heroFloat1Title">🍜 ก๋วยเตี๋ยว & เส้น</div>
+              <div class="tasting-mini-sub" id="heroFloat1Sub">น้ำซุปเข้มข้น เครื่องแน่น</div>
+            </div>
+          </div>
+
+          <div class="tasting-float-card float-bottom-left">
+            <img src="https://images.unsplash.com/photo-1558857563-b371033873b8?w=240&auto=format&fit=crop&q=80" alt="" class="tasting-mini-img" id="heroFloat2Img">
+            <div>
+              <div class="tasting-mini-title" id="heroFloat2Title">🧋 ชาไทย & คาเฟ่</div>
+              <div class="tasting-mini-sub" id="heroFloat2Sub">หวานกำลังดี ชื่นใจหลังเรียน</div>
+            </div>
+          </div>
+
+          <div class="hero-mascot-wrap">
+            <img src="assets/images/spu-chef-logo.png?v=20261118_1" alt="" class="hero-mascot">
+            <div class="hero-bubble" id="heroMascotBubble">วันนี้กินเมนูไหนดีครับ? 🍽️</div>
+          </div>
+        </div>
       </div>
 
-      <!-- Search & Filter Hub -->
+      <!-- Search & Filter Hub (Bistro Menu Search Bar) -->
       <div class="search-filter-card">
         <div class="search-main-row">
           <div class="search-input-wrapper">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="searchInput" class="search-input" placeholder="ค้นหาชื่อร้าน, เมนู (กะเพรา, เตี๋ยวเรือ, ชาไทย, สเต็ก, ส้มตำ...)" oninput="filterRestaurants()">
+            <span class="search-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </span>
+            <input type="text" id="searchInput" class="search-input" placeholder="ค้นหาชื่อร้าน, เมนูหิวๆ เช่น กะเพราหมูกรอบ, ก๋วยเตี๋ยวเรือ, ข้าวมันไก่, ชาไทย..." oninput="filterRestaurants()">
           </div>
+          <button type="button" class="btn btn-outline" id="toggleFilterDrawerBtn" onclick="toggleSearchFiltersDrawer()">
+            🎛️ ตัวกรองเพิ่มเติม
+          </button>
           <button type="button" class="btn btn-primary" onclick="filterRestaurants()">
-            ค้นหา
+            🔍 ค้นหาความอร่อย
           </button>
         </div>
 
-        <div class="filter-grid">
+        <div class="filter-grid" id="advancedFilterGrid">
           <!-- Location Filter -->
           <div class="filter-group">
-            <label class="filter-label" for="locationFilter">📍 พิกัดใน ม.ศรีปทุม</label>
+            <label class="filter-label" for="locationFilter">พิกัดใน ม.ศรีปทุม</label>
             <select id="locationFilter" class="filter-select" onchange="filterRestaurants()">
               <option value="all">ทุกพิกัดในมหาวิทยาลัย</option>
               <!-- Populated by JS -->
@@ -130,7 +186,7 @@
 
           <!-- Category Filter -->
           <div class="filter-group">
-            <label class="filter-label" for="categoryFilter">🍛 หมวดหมู่อาหาร</label>
+            <label class="filter-label" for="categoryFilter">หมวดหมู่อาหาร</label>
             <select id="categoryFilter" class="filter-select" onchange="filterRestaurants()">
               <option value="all">ทุกหมวดหมู่อาหาร</option>
               <!-- Populated by JS -->
@@ -139,7 +195,7 @@
 
           <!-- Price Range Filter -->
           <div class="filter-group">
-            <label class="filter-label" for="priceFilter">💰 ช่วงราคา</label>
+            <label class="filter-label" for="priceFilter">ช่วงราคา</label>
             <select id="priceFilter" class="filter-select" onchange="filterRestaurants()">
               <option value="all">ทุกช่วงราคา</option>
               <option value="under40">น้อยกว่า 40 บาท (ประหยัดสุดๆ)</option>
@@ -151,12 +207,12 @@
 
           <!-- Sort Order -->
           <div class="filter-group">
-            <label class="filter-label" for="sortBy">⚡ เรียงลำดับตาม</label>
+            <label class="filter-label" for="sortBy">เรียงลำดับตาม</label>
             <select id="sortBy" class="filter-select" onchange="filterRestaurants()">
-              <option value="rating">คะแนนสูงสุด ⭐</option>
-              <option value="reviews">รีวิวมากที่สุด 💬</option>
-              <option value="priceAsc">ราคาประหยัดไปแพง 💵</option>
-              <option value="priceDesc">ราคาสูงไปประหยัด 💰</option>
+              <option value="rating">คะแนนรีวิวสูงสุด</option>
+              <option value="reviews">จำนวนรีวิวมากที่สุด</option>
+              <option value="priceAsc">ราคา: ประหยัดไปสูง</option>
+              <option value="priceDesc">ราคา: สูงไปประหยัด</option>
             </select>
           </div>
         </div>
@@ -167,12 +223,44 @@
   <!-- ==========================================
        Restaurant List Section
        ========================================== -->
-  <section class="section" id="restaurantsSection">
+  <section class="section app-view-section active-view" id="restaurantsSection" data-view-group="restaurants">
     <div class="container">
+      <!-- Visual Culinary Category Strip -->
+      <div class="culinary-category-strip" id="culinaryCategoryStrip" aria-label="เลือกตามหมวดหมู่อาหาร">
+        <button type="button" class="dish-cat-card active" data-cat="all" onclick="selectDishCategory('all', this)">
+          <span class="dish-cat-emoji">🍽️</span>
+          <span class="dish-cat-label">ทุกหมวดอาหาร</span>
+        </button>
+        <button type="button" class="dish-cat-card" data-cat="ข้าวราดแกง / อาหารตามสั่ง" onclick="selectDishCategory('ข้าวราดแกง / อาหารตามสั่ง', this)">
+          <span class="dish-cat-emoji">🍳</span>
+          <span class="dish-cat-label">ตามสั่ง / ข้าวแกง</span>
+        </button>
+        <button type="button" class="dish-cat-card" data-cat="ก๋วยเตี๋ยว / บะหมี่ / ราเมน" onclick="selectDishCategory('ก๋วยเตี๋ยว / บะหมี่ / ราเมน', this)">
+          <span class="dish-cat-emoji">🍜</span>
+          <span class="dish-cat-label">ก๋วยเตี๋ยว / เส้น</span>
+        </button>
+        <button type="button" class="dish-cat-card" data-cat="เครื่องดื่ม / กาแฟสด / ชานมไข่มุก" onclick="selectDishCategory('เครื่องดื่ม / กาแฟสด / ชานมไข่มุก', this)">
+          <span class="dish-cat-emoji">🧋</span>
+          <span class="dish-cat-label">ชานม / คาเฟ่</span>
+        </button>
+        <button type="button" class="dish-cat-card" data-cat="ของทอด / ของทานเล่น" onclick="selectDishCategory('ของทอด / ของทานเล่น', this)">
+          <span class="dish-cat-emoji">🍗</span>
+          <span class="dish-cat-label">ของทอด / ทานเล่น</span>
+        </button>
+        <button type="button" class="dish-cat-card" data-cat="ของหวาน / เบเกอรี่ / วาฟเฟิล" onclick="selectDishCategory('ของหวาน / เบเกอรี่ / วาฟเฟิล', this)">
+          <span class="dish-cat-emoji">🍰</span>
+          <span class="dish-cat-label">ของหวาน / เบเกอรี่</span>
+        </button>
+        <button type="button" class="dish-cat-card" data-cat="ชาบู / หมาล่า" onclick="selectDishCategory('ชาบู / หมาล่า', this)">
+          <span class="dish-cat-emoji">🍲</span>
+          <span class="dish-cat-label">ชาบู / หมาล่า</span>
+        </button>
+      </div>
+
       <div class="section-head">
         <div>
-          <div class="section-subtitle">Food Directory</div>
-          <h2 class="section-title">ร้านเด็ดรอบรั้ว ม.ศรีปทุม</h2>
+          <div class="section-subtitle">🍽️ SPU Bistro & Canteen Reviews</div>
+          <h2 class="section-title">ลายแทงร้านเด็ดรอบรั้ว ม.ศรีปทุม</h2>
           <p class="section-desc" id="restaurantCountText">กำลังโหลดข้อมูลร้านอาหาร...</p>
         </div>
         <div id="adminAddRestaurantSlot">
@@ -184,19 +272,63 @@
       <div class="restaurant-grid" id="restaurantGrid">
         <!-- Injected dynamically by JavaScript -->
       </div>
+
+      <!-- Feature Quick Cards (Easy Navigation to Other Views) -->
+      <div class="feature-shortcut-strip">
+        <button type="button" class="feature-shortcut-card" onclick="switchAppView('roulette')">
+          <span class="fsc-icon">🎡</span>
+          <div class="fsc-text">
+            <strong>วงล้อสุ่มเมนู</strong>
+            <span>คิดไม่ออกให้วงล้อช่วยเลือก</span>
+          </div>
+        </button>
+        <button type="button" class="feature-shortcut-card" onclick="openBudgetComboPlanner()">
+          <span class="fsc-icon">🍱</span>
+          <div class="fsc-text">
+            <strong>จัดเซตตามงบ</strong>
+            <span>จับคู่จานหลัก + น้ำ/ขนม ไม่เกินงบ</span>
+          </div>
+        </button>
+        <button type="button" class="feature-shortcut-card" onclick="switchAppView('checkin')">
+          <span class="fsc-icon">🗓️</span>
+          <div class="fsc-text">
+            <strong>เช็กอิน & กรอบรูป</strong>
+            <span>สะสมไฟรับกรอบการ์ตูน 16 แบบ</span>
+          </div>
+        </button>
+        <button type="button" class="feature-shortcut-card" onclick="switchAppView('news')">
+          <span class="fsc-icon">📢</span>
+          <div class="fsc-text">
+            <strong>ข่าว & ประชาสัมพันธ์</strong>
+            <span>อัปเดตข่าวสารความอร่อยรอบรั้ว SPU</span>
+          </div>
+        </button>
+        <button type="button" class="feature-shortcut-card" onclick="switchAppView('leaderboard')">
+          <span class="fsc-icon">🏆</span>
+          <div class="fsc-text">
+            <strong>ทำเนียบนักชิม</strong>
+            <span>ตารางอันดับ & เหรียญรางวัล</span>
+          </div>
+        </button>
+      </div>
     </div>
   </section>
 
   <!-- ==========================================
-       Mini-Game: Food Roulette Wheel
+       Mini-Game: Food Roulette Wheel & Smart Budget Combo
        ========================================== -->
-  <section class="section section-alt" id="rouletteSection">
+  <section class="section section-alt app-view-section" id="rouletteSection" data-view-group="roulette">
     <div class="container">
+      <div class="view-back-bar">
+        <button type="button" class="btn btn-sm btn-outline" onclick="switchAppView('restaurants')">
+          ← กลับหน้าร้านอาหาร
+        </button>
+      </div>
       <div class="section-head" style="text-align: center; justify-content: center;">
         <div>
-          <div class="section-subtitle">Randomizer Mini-Game</div>
-          <h2 class="section-title">🎡 วงล้อเสี่ยงทาย "มื้อนี้กินอะไรดี?"</h2>
-          <p class="section-desc">คิดไม่ออกให้วงล้อช่วยตัดสินใจ! สุ่มร้านอร่อยรอบมอได้ทันที</p>
+          <div class="section-subtitle">Decision Maker & Budget Planner</div>
+          <h2 class="section-title">วงล้อสุ่มมื้ออาหาร & จัดเซตมื้อเที่ยงตามงบ</h2>
+          <p class="section-desc">คิดเมนูไม่ออกให้วงล้อช่วยตัดสินใจ หรือกำหนดงบที่มีแล้วให้ระบบจับคู่ "จานหลัก + เครื่องดื่ม/ของหวาน" อิ่มคุ้มในคลิกเดียว</p>
         </div>
       </div>
 
@@ -225,24 +357,90 @@
           <div class="roulette-filter-box">
             <label class="form-label" for="wheelLocationSelect">เลือกพื้นที่ที่จะสุ่ม:</label>
             <select id="wheelLocationSelect" class="form-control" onchange="initWheel()">
-              <option value="all">🎲 ทุกร้านในและรอบ ม.ศรีปทุม</option>
+              <option value="all">ทุกร้านในและรอบ ม.ศรีปทุม</option>
               <!-- Populated by JS -->
             </select>
           </div>
 
           <button type="button" class="btn btn-primary btn-lg" id="spinBtn" onclick="spinWheel()">
-            🎡 เริ่มหมุนวงล้อเลย!
+            เริ่มหมุนวงล้อสุ่ม
           </button>
 
           <!-- Result Box (Hidden until spin finishes) -->
           <div class="roulette-result-box" id="rouletteResultBox">
-            <div class="result-badge">🎉 ผลการสุ่มมื้อนี้ได้แก่:</div>
+            <div class="result-badge">ผลการสุ่มมื้อนี้ได้แก่:</div>
             <div class="result-restaurant-name" id="rouletteWinnerName">ชื่อร้านอาหาร</div>
-            <div class="result-meta" id="rouletteWinnerMeta">📍 พิกัดใน SPU</div>
+            <div class="result-meta" id="rouletteWinnerMeta">พิกัดใน SPU</div>
             <button type="button" class="btn btn-primary btn-sm" id="rouletteViewDetailBtn">
-              👉 ดูเมนูและรีวิวร้านนี้ทันที
+              ดูเมนูและรีวิวร้านนี้ทันที
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- ==========================================
+           Smart Budget Combo Planner (จัดเซตมื้อเที่ยงตามงบ)
+           ========================================== -->
+      <div class="budget-combo-card" id="budgetComboSectionCard">
+        <div class="budget-combo-header">
+          <div>
+            <span class="budget-combo-badge">🍱 Smart Budget Combo · ฟีเจอร์ช่วยคำนวณมื้อเที่ยง</span>
+            <h3 class="budget-combo-title">จัดเซตมื้อเที่ยงตามงบ (อิ่มครบ จานหลัก + น้ำ/ของหวาน)</h3>
+            <p class="budget-combo-desc">
+              ระบุงบประมาณในกระเป๋าของคุณ แล้วระบบจะสุ่มจับคู่ <strong>อาหารจานหลัก + เครื่องดื่มหรือของหวาน</strong> ในรั้ว SPU ที่ราคารวมกันไม่เกินงบ พร้อมคำนวณเงินทอนให้ทันที!
+            </p>
+          </div>
+        </div>
+
+        <div class="budget-combo-controls">
+          <!-- Preset Budget Pills -->
+          <div class="budget-preset-row" aria-label="เลือกงบประมาณด่วน">
+            <span class="budget-preset-label">💸 เลือกงบด่วน:</span>
+            <button type="button" class="budget-preset-pill" data-budget="50" onclick="selectBudgetPreset(50, this)">50฿ ประหยัดสุดๆ</button>
+            <button type="button" class="budget-preset-pill active" data-budget="65" onclick="selectBudgetPreset(65, this)">65฿ อิ่มคุ้มเด็กมอ</button>
+            <button type="button" class="budget-preset-pill" data-budget="80" onclick="selectBudgetPreset(80, this)">80฿ อิ่มจุกครบเซต</button>
+            <button type="button" class="budget-preset-pill" data-budget="100" onclick="selectBudgetPreset(100, this)">100฿ จัดเต็มมื้อพิเศษ</button>
+          </div>
+
+          <div class="budget-inputs-grid mobile-stack-grid">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="budgetComboInput">💰 งบมื้อเที่ยงของคุณ (บาท)</label>
+              <input type="number" id="budgetComboInput" class="form-control" min="20" max="1000" step="5" value="65" placeholder="เช่น 60, 75, 100">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="budgetComboPriceFilter">🏷️ ตัวกรองช่วงราคาต่อเมนู</label>
+              <select id="budgetComboPriceFilter" class="form-control">
+                <option value="all">ทุกช่วงราคา</option>
+                <option value="under40">น้อยกว่า 40 บาท (ประหยัดสุดๆ)</option>
+                <option value="40-60">40 - 60 บาท (ราคานักศึกษา)</option>
+                <option value="60-100">60 - 100 บาท</option>
+                <option value="over100">มากกว่า 100 บาท</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="budgetComboLocation">📍 พิกัดโรงอาหารที่ต้องการ</label>
+              <select id="budgetComboLocation" class="form-control">
+                <option value="all">ทุกพิกัดใน ม.ศรีปทุม (โรงร้อน & โรงเย็น)</option>
+                <option value="โรงเย็น อาคาร 10 (ชั้น 1)">❄️ โรงเย็น อาคาร 10 (ชั้น 1)</option>
+                <option value="โรงเย็น อาคาร 10 (ชั้น 2)">❄️ โรงเย็น อาคาร 10 (ชั้น 2)</option>
+                <option value="โรงเย็น อาคาร 10 (ชั้น 3)">❄️ โรงเย็น อาคาร 10 (ชั้น 3)</option>
+                <option value="โรงร้อน (หลังอาคาร 5)">🔥 โรงร้อน (หลังอาคาร 5)</option>
+              </select>
+            </div>
+
+            <div class="budget-submit-wrap">
+              <button type="button" class="btn btn-primary btn-lg" id="generateBudgetComboBtn" onclick="generateBudgetCombo(false)" style="width: 100%;">
+                🎲 สุ่มจัดเซตตามงบเลย!
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Combo Result Display -->
+        <div class="budget-combo-result" id="budgetComboResult">
+          <!-- Populated dynamically by generateBudgetCombo() -->
         </div>
       </div>
     </div>
@@ -251,13 +449,18 @@
   <!-- ==========================================
        Weekly Check-In & Streak Rewards Section
        ========================================== -->
-  <section class="section" id="dailyCheckInSection">
+  <section class="section app-view-section" id="dailyCheckInSection" data-view-group="checkin">
     <div class="container">
+      <div class="view-back-bar">
+        <button type="button" class="btn btn-sm btn-outline" onclick="switchAppView('restaurants')">
+          ← กลับหน้าร้านอาหาร
+        </button>
+      </div>
       <div class="section-head" style="text-align: center; justify-content: center;">
         <div>
-          <div class="section-subtitle">Daily Check-In & Streak Rewards</div>
+          <div class="section-subtitle">Daily Check-In & Rewards</div>
           <h2 class="section-title">🗓️ ตารางล็อกอินสะสมรายวัน</h2>
-          <p class="section-desc">เข้าสู่ระบบต่อเนื่องทุกวันเพื่อสะสมสตรีคเลขไฟ 🔥 และรับของรางวัลประจำสัปดาห์!</p>
+          <p class="section-desc">เข้าสู่ระบบต่อเนื่องทุกวันเพื่อสะสมสตรีคเลขไฟ และปลดล็อกรางวัลประจำสัปดาห์</p>
         </div>
       </div>
 
@@ -271,13 +474,18 @@
   <!-- ==========================================
        News & Promotions Section
        ========================================== -->
-  <section class="section section-alt" id="newsSection">
+  <section class="section section-alt app-view-section" id="newsSection" data-view-group="news">
     <div class="container">
+      <div class="view-back-bar">
+        <button type="button" class="btn btn-sm btn-outline" onclick="switchAppView('restaurants')">
+          ← กลับหน้าร้านอาหาร
+        </button>
+      </div>
       <div class="section-head">
         <div>
-          <div class="section-subtitle">Campus News & Promos</div>
-          <h2 class="section-title">ข่าวสาร & โปรโมชั่นเด็ดในมอ</h2>
-          <p class="section-desc">อัปเดตสิทธิพิเศษ ส่วนลดนักศึกษา และกิจกรรมแจกฟรีรอบมหาวิทยาลัย</p>
+          <div class="section-subtitle">Campus Food News</div>
+          <h2 class="section-title">ข่าวสาร & อัปเดตความอร่อยในมอ</h2>
+          <p class="section-desc">อัปเดตข่าวสารร้านอร่อย เมนูใหม่ และกิจกรรมน่าสนใจรอบรั้วมหาวิทยาลัยศรีปทุม</p>
         </div>
         <div id="adminAddNewsSlot">
           <!-- Rendered by JS if admin -->
@@ -293,12 +501,17 @@
   <!-- ==========================================
        Gamification & Leaderboard Section
        ========================================== -->
-  <section class="section" id="leaderboardSection">
+  <section class="section app-view-section" id="leaderboardSection" data-view-group="leaderboard">
     <div class="container">
+      <div class="view-back-bar">
+        <button type="button" class="btn btn-sm btn-outline" onclick="switchAppView('restaurants')">
+          ← กลับหน้าร้านอาหาร
+        </button>
+      </div>
       <div class="section-head">
         <div>
           <div class="section-subtitle">Hall of Fame & Badges</div>
-          <h2 class="section-title">🏆 ทำเนียบสตรีทฟู้ด & ฉายานักชิม SPU</h2>
+          <h2 class="section-title">ทำเนียบนักรีวิว & ฉายานักชิม SPU</h2>
           <p class="section-desc">ร่วมเขียนรีวิว มีประโยชน์ต่อเพื่อนๆ และล็อกอินสะสมสตรีค เพื่อไต่อันดับสุดยอดนักชิม</p>
         </div>
       </div>
@@ -307,7 +520,7 @@
         <!-- Leaderboard -->
         <div class="leaderboard-card">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-            <h3 style="font-size: 1.25rem;">🏅 อันดับนักรีวิว SPU สุดฮิต</h3>
+            <h3 style="font-size: 1.25rem;">อันดับนักรีวิว SPU ยอดนิยม</h3>
             <span style="font-size: 0.8rem; color: var(--text-muted);">จัดอันดับตามสตรีคและรีวิว</span>
           </div>
           
@@ -319,10 +532,10 @@
         <!-- Badges Showcase -->
         <div class="badges-card">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-            <h3 style="font-size: 1.25rem;">🎖️ บัดจ์เกียรติยศที่ปลดล็อกได้</h3>
+            <h3 style="font-size: 1.25rem;">เหรียญเกียรติยศที่ปลดล็อกได้</h3>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-            วิธีได้รับรางวัล: รีวิวร้านอาหาร (ปลดล็อกบัดจ์นักรีวิว) | ล็อกอินรายสัปดาห์สะสมสตรีค (ปลดล็อกกรอบโปรไฟล์และฉายา)
+            วิธีได้รับรางวัล: รีวิวร้านอาหาร (ปลดล็อกเหรียญนักรีวิว) | เช็กอินรายวันสะสมสตรีค (ปลดล็อกกรอบโปรไฟล์และฉายา)
           </p>
 
           <div class="badges-grid" id="badgesGrid">
@@ -333,6 +546,30 @@
     </div>
   </section>
 
+  <!-- Mobile Bottom Navigation Dock -->
+  <nav class="mobile-bottom-nav" aria-label="เมนูหลักบนมือถือ">
+    <button type="button" class="mob-nav-btn active" data-view="restaurants" onclick="switchAppView('restaurants')">
+      <span class="mob-nav-icon">🍽️</span>
+      <span>ร้านอาหาร</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-view="roulette" onclick="switchAppView('roulette')">
+      <span class="mob-nav-icon">🎡</span>
+      <span>สุ่มเมนู</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-view="checkin" onclick="switchAppView('checkin')">
+      <span class="mob-nav-icon">🗓️</span>
+      <span>เช็กอิน</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-view="news" onclick="switchAppView('news')">
+      <span class="mob-nav-icon">📢</span>
+      <span>ข่าวสาร</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-view="leaderboard" onclick="switchAppView('leaderboard')">
+      <span class="mob-nav-icon">🏆</span>
+      <span>อันดับ</span>
+    </button>
+  </nav>
+
   <!-- ==========================================
        Footer
        ========================================== -->
@@ -340,44 +577,45 @@
     <div class="container">
       <div class="footer-inner">
         <div>
-          <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.65rem;">
-            <img src="assets/images/spu-chef-logo.png" alt="โลโก้จานเด็ด SPU" style="height: 52px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.15));">
+          <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <img src="assets/images/spu-chef-logo.png?v=20261118_1" alt="โลโก้จานเด็ด SPU" style="height: 48px; width: auto; object-fit: contain;">
             <div>
               <div class="brand-title">จานเด็ด <span class="brand-spu">SPU</span></div>
-              <div class="brand-tag">เพื่อนคู่คิดมื้อเที่ยงชาว ม.ศรีปทุม</div>
+              <div class="brand-tag">Food Review & Randomizer</div>
             </div>
           </div>
-          <p style="color: var(--text-muted); font-size: 0.875rem; max-width: 400px;">
-            โครงการระบบรีวิวอาหารและสุ่มมื้ออาหารเพื่อชาวมหาวิทยาลัยศรีปทุม (SPU) 
-            ช่วยแก้ปัญหาคิดเมนูไม่ออก และสนับสนุนร้านค้าภายในมหาวิทยาลัย
+          <p style="color: var(--text-muted); font-size: 0.875rem; max-width: 420px; line-height: 1.6;">
+            ศูนย์รวมข้อมูลร้านอาหารและรีวิวของเด็กมหาวิทยาลัยศรีปทุม (SPU) 
+            ช่วยแก้ปัญหาคิดไม่ออกในมื้อเที่ยง พร้อมส่งเสริมร้านค้าภายในชุมชนมหาวิทยาลัย
           </p>
         </div>
-        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div style="display: flex; gap: 2.5rem; flex-wrap: wrap;">
           <div>
-            <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.9rem;">เมนูด่วน</div>
-            <ul style="list-style: none; font-size: 0.85rem; color: var(--text-muted); line-height: 1.8;">
-              <li><a href="#restaurantsSection">ค้นหาร้านอาหาร</a></li>
-              <li><a href="#rouletteSection">วงล้อสุ่มเมนู</a></li>
-              <li><a href="#dailyCheckInSection">ล็อกอินรายสัปดาห์</a></li>
+            <div style="font-weight: 700; margin-bottom: 0.65rem; font-size: 0.875rem; color: var(--text-main);">เมนูด่วน</div>
+            <ul style="list-style: none; font-size: 0.85rem; color: var(--text-muted); line-height: 2;">
+              <li><a href="#restaurantsSection" onclick="switchAppView('restaurants'); return false;" style="transition: color var(--transition-fast);">ค้นหาร้านอาหาร</a></li>
+              <li><a href="#rouletteSection" onclick="switchAppView('roulette'); return false;" style="transition: color var(--transition-fast);">วงล้อสุ่มเมนู</a></li>
+              <li><a href="#dailyCheckInSection" onclick="switchAppView('checkin'); return false;" style="transition: color var(--transition-fast);">เช็กอินรายวัน</a></li>
+              <li><a href="#newsSection" onclick="switchAppView('news'); return false;" style="transition: color var(--transition-fast);">ข่าว & โปรโมชั่น</a></li>
             </ul>
           </div>
           <div>
-            <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.9rem;">ข้อมูลเพิ่มเติม</div>
-            <ul style="list-style: none; font-size: 0.85rem; color: var(--text-muted); line-height: 1.8;">
-              <li><a href="#" onclick="openAuthModal(); return false;">🔑 เข้าสู่ระบบ / สมัคร</a></li>
-              <li><a href="#leaderboardSection">🏆 ตารางอันดับ & บัดจ์</a></li>
+            <div style="font-weight: 700; margin-bottom: 0.65rem; font-size: 0.875rem; color: var(--text-main);">ข้อมูลเพิ่มเติม</div>
+            <ul style="list-style: none; font-size: 0.85rem; color: var(--text-muted); line-height: 2;">
+              <li><a href="#" onclick="openAuthModal(); return false;" style="transition: color var(--transition-fast);">เข้าสู่ระบบ / สมัครสมาชิก</a></li>
+              <li><a href="#leaderboardSection" onclick="switchAppView('leaderboard'); return false;" style="transition: color var(--transition-fast);">ตารางอันดับ & เหรียญเกียรติยศ</a></li>
             </ul>
-            <div style="margin-top: 0.75rem; font-size: 0.775rem; color: var(--text-muted); background: var(--bg-card); padding: 0.35rem 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-              <span>👀 สถิติเข้าชมเว็บ:</span> <strong id="publicVisitorCount" style="color: var(--primary);">1</strong> <span>ครั้ง</span>
-              <span style="opacity: 0.5;">|</span>
-              <span>👥 ผู้เข้าชม:</span> <strong id="publicUniqueVisitorCount" style="color: var(--primary);">1</strong> <span>คน</span>
+            <div style="margin-top: 0.85rem; font-size: 0.775rem; color: var(--text-muted); background: var(--bg-surface-alt); padding: 0.35rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: inline-flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+              <span>สถิติการเข้าชม:</span> <strong id="publicVisitorCount" style="color: var(--primary);">1</strong> <span>ครั้ง</span>
+              <span style="opacity: 0.35;">|</span>
+              <span>ผู้เข้าชมจริง:</span> <strong id="publicUniqueVisitorCount" style="color: var(--primary);">1</strong> <span>คน</span>
             </div>
           </div>
         </div>
       </div>
 
       <div class="footer-copy">
-        © 2026 จานเด็ด SPU (Sripatum University Food Review & Roulette) | พัฒนาเพื่อการศึกษาและชุมชนชาว SPU 🎓✨
+        © 2026 จานเด็ด SPU (Sripatum University Food Review & Roulette) · พัฒนาเพื่อการศึกษาและชุมชนชาว ม.ศรีปทุม
       </div>
     </div>
   </footer>
@@ -403,19 +641,16 @@
   <div class="modal-backdrop" id="authModal" onclick="closeModalOnBackdrop(event, this)">
     <div class="modal-window">
       <div class="modal-header">
-        <div class="modal-title">🔐 เข้าสู่ระบบ / สมัครสมาชิก จานเด็ด SPU</div>
+        <div class="modal-title">เข้าสู่ระบบ / สมัครสมาชิก จานเด็ด SPU</div>
         <button type="button" class="modal-close-btn" onclick="closeModal('authModal')">✕</button>
       </div>
       <div class="modal-body">
 
-        <!-- Google Cloud Console Sign-In Integration -->
+        <!-- Firebase Google Sign-In -->
         <div class="google-auth-box" style="margin-bottom: 1.25rem;">
-          <div id="googleSignInButtonSlot" style="display: flex; justify-content: center; min-height: 40px; margin-bottom: 0.5rem;">
-            <!-- Official GIS button renders here if Client ID is configured -->
-          </div>
           <button type="button" class="btn btn-outline" id="googleCustomSignInBtn" style="width: 100%; border-color: #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 0.6rem; font-weight: 600; padding: 0.75rem 1rem;" onclick="triggerGoogleSignIn()">
             <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.79l7.97-6.2z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-            <span>เข้าสู่ระบบด้วย Google (Cloud Console)</span>
+            <span>เข้าสู่ระบบด้วย Google</span>
           </button>
         </div>
 
@@ -439,7 +674,17 @@
             </div>
             <div class="form-group">
               <label class="form-label required" for="loginPassword">รหัสผ่าน</label>
-              <input type="password" id="loginPassword" class="form-control" required placeholder="อย่างน้อย 8 ตัวอักษร">
+              <div class="password-input-wrapper">
+                <input type="password" id="loginPassword" class="form-control" required placeholder="กรอกรหัสผ่านของคุณ">
+                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="แสดงหรือซ่อนรหัสผ่าน">
+                  👁️ ดูรหัส
+                </button>
+              </div>
+            </div>
+            <div style="text-align: right; margin: -0.5rem 0 1rem 0;">
+              <button type="button" onclick="handleForgotPassword()" style="font-size: 0.8rem; color: var(--primary); font-weight: 600; text-decoration: underline;">
+                ลืมรหัสผ่าน? ส่งลิงก์รีเซ็ตทางอีเมล
+              </button>
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%;">
               เข้าสู่ระบบ
@@ -449,15 +694,15 @@
 
         <!-- Register Form -->
         <div class="tab-pane" id="registerTab">
-          <form onsubmit="handleRegisterSubmit(event)">
+          <form onsubmit="handleRegisterSubmit(event)" novalidate>
             <div class="form-group">
-              <label class="form-label required" for="regName">ชื่อ-นามสกุล หรือชื่อเล่นในมอ</label>
-              <input type="text" id="regName" class="form-control" required placeholder="เช่น น้องฟ้า DekSPU 67">
+              <label class="form-label" for="regName">ชื่อ-นามสกุล หรือชื่อเล่นในมอ</label>
+              <input type="text" id="regName" class="form-control" placeholder="เช่น น้องฟ้า DekSPU 67">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="mobile-stack-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
               <div class="form-group">
-                <label class="form-label" for="regStudentId">รหัสนักศึกษา / เลขประจำตัว</label>
-                <input type="text" id="regStudentId" class="form-control" placeholder="เช่น 65012345 หรือ SPU-102">
+                <label class="form-label" for="regStudentId">รหัสนักศึกษา / เลขประจำตัว (เว้นว่างให้ระบบสุ่มได้)</label>
+                <input type="text" id="regStudentId" class="form-control" placeholder="เว้นว่างไว้เพื่อสุ่มไอดีอัตโนมัติ">
               </div>
               <div class="form-group">
                 <label class="form-label" for="regPhone">เบอร์โทรศัพท์ติดต่อ</label>
@@ -468,10 +713,10 @@
               <label class="form-label required" for="regEmail">อีเมล</label>
               <input type="email" id="regEmail" class="form-control" required placeholder="name@spu.ac.th หรือ gmail.com">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="mobile-stack-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
               <div class="form-group">
-                <label class="form-label required" for="regUserType">สถานะผู้ใช้งานใน SPU</label>
-                <select id="regUserType" class="form-control" required>
+                <label class="form-label" for="regUserType">สถานะผู้ใช้งานใน SPU</label>
+                <select id="regUserType" class="form-control">
                   <option value="นักศึกษา">นักศึกษา ม.ศรีปทุม</option>
                   <option value="อาจารย์/เจ้าหน้าที่">อาจารย์ / บุคลากร ม.ศรีปทุม</option>
                   <option value="บุคคลทั่วไป">บุคคลทั่วไป / ผู้มาเยือน</option>
@@ -479,27 +724,18 @@
               </div>
               <div class="form-group">
                 <label class="form-label" for="regFaculty">คณะ / สำนักวิชา</label>
-                <select id="regFaculty" class="form-control">
-                  <option value="คณะเทคโนโลยีสารสนเทศ">คณะเทคโนโลยีสารสนเทศ (IT)</option>
-                  <option value="คณะบริหารธุรกิจ">คณะบริหารธุรกิจ (SBS)</option>
-                  <option value="คณะนิเทศศาสตร์">คณะนิเทศศาสตร์ (Comm Arts)</option>
-                  <option value="คณะวิศวกรรมศาสตร์">คณะวิศวกรรมศาสตร์</option>
-                  <option value="คณะดิจิทัลมีเดีย">คณะดิจิทัลมีเดีย (SDM)</option>
-                  <option value="คณะศิลปศาสตร์">คณะศิลปศาสตร์</option>
-                  <option value="คณะนิติศาสตร์">คณะนิติศาสตร์</option>
-                  <option value="คณะสถาปัตยกรรมศาสตร์">คณะสถาปัตยกรรมศาสตร์</option>
-                  <option value="วิทยาลัยการบินและการคมนาคม">วิทยาลัยการบินและการคมนาคม</option>
-                  <option value="วิทยาลัยการท่องเที่ยวและการบริการ">วิทยาลัยการท่องเที่ยวและการบริการ</option>
-                  <option value="วิทยาลัยนานาชาติ">วิทยาลัยนานาชาติ (SPUIC)</option>
-                  <option value="สำนักวิชาการ / ส่วนกลาง">สำนักวิชาการ / ส่วนกลาง</option>
-                  <option value="อื่นๆ / บุคลากรภายนอก">อื่นๆ / บุคลากรภายนอก</option>
-                </select>
+                <input type="text" id="regFaculty" class="form-control" placeholder="พิมพ์คณะหรือสำนักวิชา เช่น คณะนิเทศศาสตร์, IT...">
               </div>
             </div>
             <div class="form-group">
               <label class="form-label required" for="regPassword">รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)</label>
-              <input type="password" id="regPassword" class="form-control" minlength="8" required placeholder="รหัสผ่านอย่างน้อย 8 ตัวอักษร">
-              <div class="form-hint">ตามเงื่อนไขระบบ: รหัสผ่านต้องมีความยาวไม่น้อยกว่า 8 ตัวอักษร</div>
+              <div class="password-input-wrapper">
+                <input type="password" id="regPassword" class="form-control" minlength="8" required placeholder="รหัสผ่านอย่างน้อย 8 ตัวอักษร">
+                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('regPassword', this)" aria-label="แสดงหรือซ่อนรหัสผ่าน">
+                  👁️ ดูรหัส
+                </button>
+              </div>
+              <div class="form-hint">ตามเงื่อนไขระบบ: รหัสผ่านต้องมีความยาวไม่น้อยกว่า 8 ตัวอักษร (กด "ดูรหัส" เพื่อตรวจสอบความถูกต้องได้)</div>
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%;">
               ยืนยันการสมัครสมาชิก
@@ -516,7 +752,7 @@
   <div class="modal-backdrop" id="profileModal" onclick="closeModalOnBackdrop(event, this)">
     <div class="modal-window modal-lg">
       <div class="modal-header">
-        <div class="modal-title">👤 โปรไฟล์สมาชิก จานเด็ด SPU</div>
+        <div class="modal-title">โปรไฟล์สมาชิก จานเด็ด SPU</div>
         <button type="button" class="modal-close-btn" onclick="closeModal('profileModal')">✕</button>
       </div>
       <div class="modal-body" id="profileModalBody">
@@ -532,7 +768,7 @@
     <div class="modal-window modal-xl">
       <div class="modal-header" style="background: var(--bg-surface-alt);">
         <div class="modal-title">
-          👑 แผงควบคุมระบบแอดมิน - จานเด็ด SPU
+          แผงควบคุมระบบผู้ดูแล · จานเด็ด SPU
         </div>
         <button type="button" class="modal-close-btn" onclick="closeModal('adminModal')">✕</button>
       </div>
@@ -542,10 +778,10 @@
           <button type="button" class="tab-btn active" onclick="switchAdminTab('adminStatsTab', this)">📊 ภาพรวม</button>
           <button type="button" class="tab-btn" onclick="switchAdminTab('adminUsersTab', this)">👥 จัดการสมาชิก</button>
           <button type="button" class="tab-btn" onclick="switchAdminTab('adminRestaurantsTab', this)">🏬 จัดการร้าน & เมนู</button>
-          <button type="button" class="tab-btn" onclick="switchAdminTab('adminReviewsTab', this)">🛡️ ประหารคอมเมนต์ / รีวิว</button>
+          <button type="button" class="tab-btn" onclick="switchAdminTab('adminReviewsTab', this)">🛡️ ตรวจสอบรีวิว</button>
           <button type="button" class="tab-btn" onclick="switchAdminTab('adminNewsTab', this)">📢 จัดการข่าว & โปร</button>
           <button type="button" class="tab-btn" onclick="switchAdminTab('adminThemeTab', this)">🎨 ปรับแต่งธีม & เทศกาล</button>
-          <button type="button" class="tab-btn" onclick="switchAdminTab('adminSystemTab', this)">⚙️ ตั้งค่า & รีเซ็ต</button>
+          <button type="button" class="tab-btn" onclick="switchAdminTab('adminSystemTab', this)">⚙️ ตั้งค่าระบบ</button>
         </div>
 
         <!-- TAB 1: System Statistics -->
@@ -558,7 +794,7 @@
             <ul style="padding-left: 1.25rem; font-size: 0.875rem; color: var(--text-muted); line-height: 1.8;">
               <li><strong>จัดการร้านอาหาร:</strong> เพิ่มร้านอาหารใหม่ แก้ไขข้อมูล ปรับราคา และเพิ่มเมนูอาหารในโรงเย็น อาคาร 10 และโรงร้อนหลังอาคาร 5</li>
               <li><strong>ประหารคอมเมนต์:</strong> สามารถลบรีวิวที่ไม่เหมาะสม หรือตอบรับรายงานจากผู้ใช้งานได้ทันที</li>
-              <li><strong>เปลี่ยนธีมเทศกาล:</strong> เปลี่ยนบรรยากาศเว็บเป็น ลอยกระทง, ฮาโลวีน, คริสต์มาส, สงกรานต์, ตรุษจีน หรือ SPU Classic</li>
+              <li><strong>เปลี่ยนธีมเทศกาล:</strong> เปลี่ยนบรรยากาศเว็บเป็น ลอยกระทง, ฮาโลวีน, คริสต์มาส, สงกรานต์, ตรุษจีน หรือ Classic</li>
               <li><strong>จัดการข้อความ:</strong> แก้ไขข้อความแบนเนอร์ แถบประกาศ และสโลแกนหน้าเว็บได้ตลอดเวลา</li>
             </ul>
           </div>
@@ -572,21 +808,7 @@
               <p style="font-size: 0.85rem; color: var(--text-muted);">ตรวจสอบ แก้ไขสิทธิ์ (Role) มอบฉายา หรือลบบัญชีผู้ใช้ที่สมัครเข้ามา</p>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-              <select id="adminUserFacultyFilter" class="form-control" style="width: auto;" onchange="renderAdminUsers()">
-                <option value="all">📍 ทุกคณะ / สังกัด</option>
-                <option value="คณะเทคโนโลยีสารสนเทศ">คณะเทคโนโลยีสารสนเทศ (IT)</option>
-                <option value="คณะบริหารธุรกิจ">คณะบริหารธุรกิจ (SBS)</option>
-                <option value="คณะนิเทศศาสตร์">คณะนิเทศศาสตร์</option>
-                <option value="คณะวิศวกรรมศาสตร์">คณะวิศวกรรมศาสตร์</option>
-                <option value="คณะดิจิทัลมีเดีย">คณะดิจิทัลมีเดีย (SDM)</option>
-                <option value="คณะศิลปศาสตร์">คณะศิลปศาสตร์</option>
-                <option value="คณะนิติศาสตร์">คณะนิติศาสตร์</option>
-                <option value="คณะสถาปัตยกรรมศาสตร์">คณะสถาปัตยกรรมศาสตร์</option>
-                <option value="วิทยาลัยการบินและการคมนาคม">วิทยาลัยการบิน</option>
-                <option value="วิทยาลัยการท่องเที่ยวและการบริการ">วิทยาลัยท่องเที่ยว</option>
-                <option value="วิทยาลัยนานาชาติ">วิทยาลัยนานาชาติ</option>
-                <option value="อื่นๆ">อื่นๆ / ภายนอก</option>
-              </select>
+              <input type="text" id="adminUserFacultyFilter" class="form-control" style="width: 190px;" placeholder="🏛️ กรองคณะ / สำนักวิชา..." oninput="renderAdminUsers()">
               <select id="adminUserRoleFilter" class="form-control" style="width: auto;" onchange="renderAdminUsers()">
                 <option value="all">แสดงทุกบทบาท</option>
                 <option value="admin">👑 เฉพาะแอดมิน</option>
@@ -670,16 +892,139 @@
           </div>
         </div>
 
-        <!-- TAB 5: News & Announcements -->
+        <!-- TAB 5: News & Announcements + Hero Showcase Customizer -->
         <div class="tab-pane" id="adminNewsTab">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <h3>จัดการข่าวสารและโปรโมชั่น</h3>
+            <h3>📢 จัดการข่าวสารและโปรโมชั่น</h3>
             <button type="button" class="btn btn-primary btn-sm" onclick="openAddNewsModal()">
               ➕ โพสต์ข่าวใหม่
             </button>
           </div>
-          <div id="adminNewsListContainer">
+          <div id="adminNewsListContainer" style="margin-bottom: 2rem;">
             <!-- Dynamically populated -->
+          </div>
+
+          <hr style="margin: 1.75rem 0; border: none; border-top: 2px dashed var(--border-color);">
+
+          <!-- Hero Showcase Board Customizer -->
+          <div id="adminHeroShowcaseSection">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+              <div>
+                <h3 style="margin-bottom: 0.25rem;">🖼️ ตั้งค่าภาพโชว์เคส & คำบรรยายการ์ดอาหารหน้าแรก</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
+                  ปรับเปลี่ยนรูปภาพ (อัปโหลดจากเครื่อง หรือใส่ URL) และแก้ไขข้อความบนการ์ดโชว์เคสฝั่งขวาของหน้าแรกได้ตามต้องการ
+                </p>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" onclick="resetHeroShowcaseToDefault()">
+                🔄 คืนค่าเริ่มต้น
+              </button>
+            </div>
+
+            <form onsubmit="handleHeroShowcaseSave(event)">
+              <!-- 1. Main Showcase Card -->
+              <div style="background: var(--bg-surface-alt); border: 1.5px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1.25rem;">
+                <h4 style="margin-bottom: 0.85rem; color: var(--primary);">1️⃣ การ์ดภาพอาหารใบใหญ่ (ตรงกลาง)</h4>
+                
+                <div class="mobile-stack-grid" style="display: grid; grid-template-columns: 160px 1fr; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                  <div style="width: 160px; height: 115px; border-radius: var(--radius-md); overflow: hidden; border: 2px solid var(--card-border); background: var(--bg-surface-alt, #0f172a);">
+                    <img id="editShowcaseMainPreview" src="https://images.unsplash.com/photo-1562565652-a0d8f0c59eb4?w=640&auto=format&fit=crop&q=80" alt="ตัวอย่างรูปหลัก" style="width: 100%; height: 100%; object-fit: cover; display: block;">
+                  </div>
+                  <div>
+                    <label class="form-label" for="editShowcaseMainImg">รูปภาพการ์ดหลัก (อัปโหลดจากเครื่อง หรือใส่ URL)</label>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                      <input type="file" id="editShowcaseMainFile" accept="image/*" style="display: none;" onchange="handleShowcaseImageUpload(event, 'main')">
+                      <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('editShowcaseMainFile').click()">
+                        📁 เลือกรูปจากเครื่อง
+                      </button>
+                    </div>
+                    <input type="text" id="editShowcaseMainImg" class="form-control" placeholder="หรือวางลิงก์รูปภาพ (https://...)" oninput="previewShowcaseUrlInput('main', this.value)">
+                  </div>
+                </div>
+
+                <div class="mobile-stack-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label class="form-label" for="editShowcasePriceStamp">ป้ายราคา / ข้อความมุมขวาบน</label>
+                    <input type="text" id="editShowcasePriceStamp" class="form-control" placeholder="เช่น 🔥 ~45-60฿">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label class="form-label" for="editShowcaseDishCat">ป้ายหมวดหมู่สีแดง</label>
+                    <input type="text" id="editShowcaseDishCat" class="form-control" placeholder="เช่น 🍳 จานด่วนยอดฮิตเด็ก SPU">
+                  </div>
+                </div>
+
+                <div class="mobile-stack-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" for="editShowcaseDishTitle">ชื่อเมนู / หัวข้อหลักบนภาพ</label>
+                    <input type="text" id="editShowcaseDishTitle" class="form-control" placeholder="เช่น กะเพราหมูกรอบไข่ดาวเยิ้ม & อาหารตามสั่ง">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" for="editShowcaseDishMeta">คำบรรยายย่อยด้านล่าง</label>
+                    <input type="text" id="editShowcaseDishMeta" class="form-control" placeholder="เช่น ★ 4.9 · รีวิวแน่น · โรงร้อน & โรงเย็น">
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. Floating Cards 1 & 2 -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+                <!-- Floating Card Top-Left -->
+                <div style="background: var(--bg-surface-alt); border: 1.5px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.15rem;">
+                  <h4 style="margin-bottom: 0.75rem; color: var(--primary);">2️⃣ การ์ดลอยมุมบนซ้าย (ใบเล็กที่ 1)</h4>
+                  <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.75rem;">
+                    <img id="editShowcaseFloat1Preview" src="https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=240&auto=format&fit=crop&q=80" alt="ตัวอย่างรูปย่อย 1" style="width: 58px; height: 58px; border-radius: 12px; object-fit: cover; border: 2px solid var(--card-border); flex-shrink: 0;">
+                    <div style="flex-grow: 1;">
+                      <input type="file" id="editShowcaseFloat1File" accept="image/*" style="display: none;" onchange="handleShowcaseImageUpload(event, 'float1')">
+                      <button type="button" class="btn btn-outline btn-sm" style="margin-bottom: 0.35rem;" onclick="document.getElementById('editShowcaseFloat1File').click()">
+                        📁 เลือกรูปจากเครื่อง
+                      </button>
+                      <input type="text" id="editShowcaseFloat1Img" class="form-control" placeholder="หรือวาง URL รูปภาพ..." style="font-size: 0.8rem; padding: 0.35rem 0.6rem;" oninput="previewShowcaseUrlInput('float1', this.value)">
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0.6rem;">
+                    <label class="form-label" for="editShowcaseFloat1Title">หัวข้อการ์ดใบที่ 1</label>
+                    <input type="text" id="editShowcaseFloat1Title" class="form-control" placeholder="เช่น 🍜 ก๋วยเตี๋ยว & เส้น">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" for="editShowcaseFloat1Sub">คำบรรยายการ์ดใบที่ 1</label>
+                    <input type="text" id="editShowcaseFloat1Sub" class="form-control" placeholder="เช่น น้ำซุปเข้มข้น เครื่องแน่น">
+                  </div>
+                </div>
+
+                <!-- Floating Card Bottom-Left -->
+                <div style="background: var(--bg-surface-alt); border: 1.5px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.15rem;">
+                  <h4 style="margin-bottom: 0.75rem; color: var(--primary);">3️⃣ การ์ดลอยมุมล่างซ้าย (ใบเล็กที่ 2)</h4>
+                  <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.75rem;">
+                    <img id="editShowcaseFloat2Preview" src="https://images.unsplash.com/photo-1558857563-b371033873b8?w=240&auto=format&fit=crop&q=80" alt="ตัวอย่างรูปย่อย 2" style="width: 58px; height: 58px; border-radius: 12px; object-fit: cover; border: 2px solid var(--card-border); flex-shrink: 0;">
+                    <div style="flex-grow: 1;">
+                      <input type="file" id="editShowcaseFloat2File" accept="image/*" style="display: none;" onchange="handleShowcaseImageUpload(event, 'float2')">
+                      <button type="button" class="btn btn-outline btn-sm" style="margin-bottom: 0.35rem;" onclick="document.getElementById('editShowcaseFloat2File').click()">
+                        📁 เลือกรูปจากเครื่อง
+                      </button>
+                      <input type="text" id="editShowcaseFloat2Img" class="form-control" placeholder="หรือวาง URL รูปภาพ..." style="font-size: 0.8rem; padding: 0.35rem 0.6rem;" oninput="previewShowcaseUrlInput('float2', this.value)">
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0.6rem;">
+                    <label class="form-label" for="editShowcaseFloat2Title">หัวข้อการ์ดใบที่ 2</label>
+                    <input type="text" id="editShowcaseFloat2Title" class="form-control" placeholder="เช่น 🧋 ชาไทย & คาเฟ่">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" for="editShowcaseFloat2Sub">คำบรรยายการ์ดใบที่ 2</label>
+                    <input type="text" id="editShowcaseFloat2Sub" class="form-control" placeholder="เช่น หวานกำลังดี ชื่นใจหลังเรียน">
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3. Mascot Speech Bubble -->
+              <div style="background: var(--bg-surface-alt); border: 1.5px solid var(--border-color); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.25rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="editShowcaseMascotBubble">4️⃣ ข้อความคำพูดมาสคอตเชฟมุมขวาล่าง</label>
+                  <input type="text" id="editShowcaseMascotBubble" class="form-control" placeholder="เช่น วันนี้กินเมนูไหนดีครับ? 🍽️">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%;">
+                💾 บันทึกภาพและคำบรรยายโชว์เคสหน้าแรก
+              </button>
+            </form>
           </div>
         </div>
 
@@ -697,18 +1042,18 @@
           <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--border-color);">
 
           <h3 style="margin-bottom: 0.5rem;">✍️ แก้ไขข้อความในเว็บไซต์</h3>
-          <form onsubmit="handleSiteTextSave(event)">
+          <form onsubmit="handleSiteTextSave(event)" novalidate>
             <div class="form-group">
               <label class="form-label" for="editTagline">สโลแกนหลัก (Tagline)</label>
-              <input type="text" id="editTagline" class="form-control" required>
+              <input type="text" id="editTagline" class="form-control">
             </div>
             <div class="form-group">
               <label class="form-label" for="editTicker">ข้อความแถบประกาศวิ่ง (Ticker Announcement)</label>
-              <input type="text" id="editTicker" class="form-control" required>
+              <input type="text" id="editTicker" class="form-control">
             </div>
             <div class="form-group">
               <label class="form-label" for="editBannerText">ข้อความแบนเนอร์กิจกรรม (Festival Banner)</label>
-              <input type="text" id="editBannerText" class="form-control" required>
+              <input type="text" id="editBannerText" class="form-control">
             </div>
             <button type="submit" class="btn btn-primary">
               💾 บันทึกข้อความเว็บไซต์
@@ -716,52 +1061,23 @@
           </form>
         </div>
 
-        <!-- TAB 7: Reset & Settings -->
+        <!-- TAB 7: Firebase Status & Info -->
         <div class="tab-pane" id="adminSystemTab">
-          <h3>⚙️ จัดการระบบ & Google Cloud Console</h3>
+          <h3>🔥 จัดการระบบ & สถานะ Firebase</h3>
           <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
-            กำหนดค่าการเชื่อมต่อ Google Cloud OAuth 2.0 และจัดการข้อมูลของเว็บไซต์
+            ระบบเชื่อมต่อกับ Firebase Authentication และ Cloud Firestore แบบเรียลไทม์ (สำหรับ GitHub Pages)
           </p>
 
-          <!-- Google Cloud Console Config Card -->
-          <div style="background: var(--bg-surface-alt); border: 1.5px solid var(--border-color); padding: 1.5rem; border-radius: var(--radius-lg); margin-bottom: 1.5rem;">
-            <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem;">
-              <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.79l7.97-6.2z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-              <h4 style="margin: 0; font-size: 1.1rem;">ตั้งค่า Google Cloud Console OAuth 2.0 Web Client ID</h4>
-            </div>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-              นำ Client ID ที่ได้จาก Google Cloud Console (APIs & Services > Credentials > OAuth Client IDs) มาวางที่นี่เพื่อเปิดใช้งานการล็อกอิน Google จริง
-            </p>
-            
-            <!-- Google Client ID Status Strip (Image 1 location in Admin Dashboard) -->
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding: 0.75rem 1rem; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-color); flex-wrap: wrap; gap: 0.5rem;">
-              <span id="googleClientIdStatus" style="font-size: 0.85rem; font-weight: 600;">⚠️ Google Client ID: <em>ยังไม่ได้ตั้งค่า</em></span>
-              <button type="button" class="btn btn-outline btn-sm" onclick="openGoogleConfigModal()">⚙️ ตั้งค่า Client ID</button>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="adminGoogleClientIdInput">OAuth 2.0 Client ID:</label>
-              <input type="text" id="adminGoogleClientIdInput" class="form-control" placeholder="เช่น 1234567890-abcdef.apps.googleusercontent.com">
-              <div class="form-hint">สร้างได้ฟรีจาก <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color: var(--primary); text-decoration: underline;">Google Cloud Console</a></div>
-            </div>
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <button type="button" class="btn btn-primary btn-sm" onclick="saveGoogleClientIdFromAdmin()">
-                💾 บันทึก Google Client ID
-              </button>
-              <button type="button" class="btn btn-outline btn-sm" onclick="openGoogleConfigModal()">
-                ⚙️ คำแนะนำตั้งค่า Client ID (Setup Guide)
-              </button>
-            </div>
+          <div id="firebaseStatusBox" style="background: var(--bg-surface-alt); border: 1.5px solid var(--border-color); padding: 1.5rem; border-radius: var(--radius-lg); margin-bottom: 1.5rem;">
+            <div style="font-weight: 700; margin-bottom: 0.5rem;">🔄 กำลังตรวจสอบสถานะการเชื่อมต่อ Firebase...</div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">ตรวจสอบค่าในไฟล์ js/firebase-config.js</p>
           </div>
 
-          <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 1.5rem; border-radius: var(--radius-lg); margin-bottom: 1.5rem;">
-            <h4 style="color: #991b1b; margin-bottom: 0.5rem;">⚠️ คืนค่าข้อมูลเริ่มต้น (Reset Data)</h4>
-            <p style="font-size: 0.85rem; color: #7f1d1d; margin-bottom: 1rem;">
-              การกดปุ่มนี้จะรีเซ็ตข้อมูลทั้งหมดกลับสู่ค่าเริ่มต้น (เฉพาะผู้ดูแลระบบเท่านั้นที่มีสิทธิ์ดำเนินการ)
+          <div style="background: var(--bg-surface-alt); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--radius-lg);">
+            <h4 style="margin-bottom: 0.5rem;">🛡️ ความปลอดภัยของบัญชีแอดมิน</h4>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0; line-height: 1.6;">
+              สิทธิ์แอดมินควบคุมผ่าน Cloud Firestore (<code>users/{uid}.role === "admin"</code>) ร่วมกับ Firebase Security Rules โดยไม่มีการฝังรหัสผ่านหรือบัญชีแอดมินไว้ในโค้ดหน้าเว็บ และไม่มีการเก็บข้อมูลจำลองปลอมเมื่อฐานข้อมูลว่าง
             </p>
-            <button type="button" class="btn btn-danger" onclick="resetAllDemoData()">
-              🔄 คืนค่าข้อมูลเริ่มต้น
-            </button>
           </div>
         </div>
 
@@ -775,20 +1091,20 @@
   <div class="modal-backdrop" id="restaurantFormModal" onclick="closeModalOnBackdrop(event, this)">
     <div class="modal-window modal-lg">
       <div class="modal-header">
-        <div class="modal-title" id="restaurantFormModalTitle">➕ เพิ่มร้านอาหารใหม่ใน SPU</div>
+        <div class="modal-title" id="restaurantFormModalTitle">เพิ่มร้านอาหารใหม่ใน SPU</div>
         <button type="button" class="modal-close-btn" onclick="closeModal('restaurantFormModal')">✕</button>
       </div>
       <div class="modal-body">
-        <form id="restaurantForm" onsubmit="handleRestaurantFormSubmit(event)">
+        <form id="restaurantForm" onsubmit="handleRestaurantFormSubmit(event)" novalidate>
           <input type="hidden" id="editRestaurantId">
           <div class="form-group">
-            <label class="form-label required" for="rstName">ชื่อร้านอาหาร</label>
-            <input type="text" id="rstName" class="form-control" required placeholder="เช่น ป้าพร ตามสั่งกระทะเหล็ก">
+            <label class="form-label" for="rstName">ชื่อร้านอาหาร</label>
+            <input type="text" id="rstName" class="form-control" placeholder="เช่น ป้าพร ตามสั่งกระทะเหล็ก">
           </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="mobile-stack-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="form-group">
-              <label class="form-label required" for="rstLocation">พิกัดใน ม.ศรีปทุม</label>
-              <select id="rstLocation" class="form-control" required>
+              <label class="form-label" for="rstLocation">พิกัดใน ม.ศรีปทุม</label>
+              <select id="rstLocation" class="form-control">
                 <option value="โรงเย็น อาคาร 10 (ชั้น 1)">โรงเย็น อาคาร 10 (ชั้น 1)</option>
                 <option value="โรงเย็น อาคาร 10 (ชั้น 2)">โรงเย็น อาคาร 10 (ชั้น 2)</option>
                 <option value="โรงเย็น อาคาร 10 (ชั้น 3)">โรงเย็น อาคาร 10 (ชั้น 3)</option>
@@ -796,22 +1112,21 @@
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label required" for="rstCategory">หมวดหมู่อาหาร</label>
-              <select id="rstCategory" class="form-control" required>
+              <label class="form-label" for="rstCategory">หมวดหมู่อาหาร</label>
+              <select id="rstCategory" class="form-control">
                 <option value="ข้าวราดแกง / อาหารตามสั่ง">ข้าวราดแกง / อาหารตามสั่ง</option>
                 <option value="ก๋วยเตี๋ยว / บะหมี่ / ราเมน">ก๋วยเตี๋ยว / บะหมี่ / ราเมน</option>
-                <option value="เบอร์เกอร์ / สเต็ก / ฟาสต์ฟู้ด">เบอร์เกอร์ / สเต็ก / ฟาสต์ฟู้ด</option>
                 <option value="เครื่องดื่ม / กาแฟสด / ชานมไข่มุก">เครื่องดื่ม / กาแฟสด / ชานมไข่มุก</option>
+                <option value="ของทอด / ของทานเล่น">ของทอด / ของทานเล่น</option>
                 <option value="ของหวาน / เบเกอรี่ / วาฟเฟิล">ของหวาน / เบเกอรี่ / วาฟเฟิล</option>
-                <option value="ส้มตำ / ยำแซ่บ / อาหารอีสาน">ส้มตำ / ยำแซ่บ / อาหารอีสาน</option>
-                <option value="อาหารเพื่อสุขภาพ / มังสวิรัติ">อาหารเพื่อสุขภาพ / มังสวิรัติ</option>
+                <option value="ชาบู / หมาล่า">ชาบู / หมาล่า</option>
               </select>
             </div>
           </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="mobile-stack-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="form-group">
-              <label class="form-label required" for="rstPriceRange">ช่วงราคา</label>
-              <select id="rstPriceRange" class="form-control" required>
+              <label class="form-label" for="rstPriceRange">ช่วงราคา</label>
+              <select id="rstPriceRange" class="form-control">
                 <option value="< 40 บาท">< 40 บาท (ประหยัดมาก)</option>
                 <option value="40 - 60 บาท" selected>40 - 60 บาท (ราคานักศึกษา)</option>
                 <option value="60 - 100 บาท">60 - 100 บาท</option>
@@ -819,17 +1134,17 @@
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label required" for="rstAvgPrice">ราคาเฉลี่ยต่อจาน (บาท)</label>
-              <input type="number" id="rstAvgPrice" class="form-control" min="1" required value="50">
+              <label class="form-label" for="rstAvgPrice">ราคาเฉลี่ยต่อจาน (บาท)</label>
+              <input type="number" id="rstAvgPrice" class="form-control" min="0" value="50">
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label required" for="rstOpenHours">วัน-เวลาเปิดให้บริการ</label>
-            <input type="text" id="rstOpenHours" class="form-control" required placeholder="เช่น 08:00 - 17:00 น. (จันทร์ - เสาร์)">
+            <label class="form-label" for="rstOpenHours">วัน-เวลาเปิดให้บริการ</label>
+            <input type="text" id="rstOpenHours" class="form-control" placeholder="เช่น 08:00 - 17:00 น. (จันทร์ - เสาร์)">
           </div>
           <div class="form-group">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-              <label class="form-label required" style="margin-bottom: 0;">รูปภาพร้านอาหาร (เพิ่มได้สูงสุด 5 รูป)</label>
+              <label class="form-label" style="margin-bottom: 0;">รูปภาพร้านอาหาร (เพิ่มได้สูงสุด 5 รูป)</label>
               <span id="rstImageCountBadge" style="font-size: 0.825rem; font-weight: 700; color: var(--primary); background: var(--primary-light); padding: 0.15rem 0.55rem; border-radius: var(--radius-full);">0/5 รูป</span>
             </div>
             <p style="font-size: 0.775rem; color: var(--text-muted); margin-bottom: 0.75rem;">
@@ -846,13 +1161,13 @@
               <input type="file" id="rstImageFilesInput" accept="image/*" multiple style="display: none;" onchange="handleRestaurantMultiFileUpload(event)">
               <input type="file" id="rstImageFile" accept="image/*" style="display: none;" onchange="handleRestaurantMultiFileUpload(event)">
               
-              <div style="font-size: 2rem; margin-bottom: 0.25rem;">📷</div>
+              <div style="font-size: 1.75rem; margin-bottom: 0.25rem;">📷</div>
               <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.25rem;">เพิ่มรูปภาพร้านอาหารจากเครื่องของคุณ</div>
               <div style="font-size: 0.775rem; color: var(--text-muted); margin-bottom: 0.75rem;">รองรับไฟล์ PNG, JPG, JPEG, WebP, GIF (สูงสุด 5 รูป)</div>
               
               <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
                 <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('rstImageFilesInput').click()">
-                  📁 เลือกรูปภาพจากคอมพิวเตอร์ (เลือกพร้อมกันได้สูงสุด 5 รูป)
+                  เลือกรูปภาพจากคอมพิวเตอร์ (สูงสุด 5 รูป)
                 </button>
               </div>
             </div>
@@ -861,7 +1176,7 @@
             <div style="display: flex; gap: 0.5rem; align-items: center;">
               <input type="text" id="rstImageUrlInput" class="form-control" placeholder="หรือวางลิงก์รูปภาพ (Image URL) ที่นี่..." style="flex-grow: 1;">
               <button type="button" class="btn btn-outline btn-sm" onclick="addRestaurantImageFromUrl()" style="white-space: nowrap;">
-                ➕ เพิ่ม URL
+                เพิ่ม URL
               </button>
             </div>
             <!-- Hidden input for backwards compatibility -->
@@ -873,15 +1188,12 @@
                ========================================== -->
           <div style="background: var(--bg-surface-alt); border: 1.5px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="font-size: 1.35rem;">🍽️</span>
-                <div>
-                  <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-color);">เมนูแนะนำของร้าน (3 - 4 รายการ พร้อมแนบรูปภาพ)</div>
-                  <div style="font-size: 0.775rem; color: var(--text-muted);">ระบุชื่อเมนู ราคา และแนบรูปภาพจานเด็ดเพื่อแสดงบนวงล้อสุ่มและหน้ารายละเอียดร้าน</div>
-                </div>
+              <div>
+                <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">เมนูแนะนำของร้าน (ไม่บังคับกรอกครบ)</div>
+                <div style="font-size: 0.775rem; color: var(--text-muted);">ระบุเฉพาะเมนูที่ต้องการเพิ่มได้เลย ช่องที่เว้นว่างไว้จะถูกข้ามอัตโนมัติ</div>
               </div>
               <button type="button" class="btn btn-primary btn-sm" id="rstFormAddMenuBtn" onclick="addRestaurantFormMenuSlot()">
-                ➕ เพิ่มเมนูแนะนำ
+                เพิ่มเมนูแนะนำ
               </button>
             </div>
 
@@ -890,16 +1202,36 @@
               <!-- Populated by JS -->
             </div>
           </div>
+
+          <!-- ==========================================
+               Store Menu List Sections (📋 รายการเมนูในร้าน)
+               ========================================== -->
+          <div id="rstFormMenuSectionsBox" style="background: var(--bg-surface-alt); border: 1.5px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">📋 รายการเมนูในร้าน (แยกตามหมวดหมู่)</div>
+                <div style="font-size: 0.775rem; color: var(--text-muted);">เพิ่ม แก้ไข หรือลบหมวดหมู่และรายการอาหารพร้อมราคาที่จะแสดงในหัวข้อ "รายการเมนูในร้าน"</div>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" id="rstFormAddSectionBtn" onclick="addRestaurantMenuSectionSlot()">
+                ➕ เพิ่มหมวดหมู่เมนู
+              </button>
+            </div>
+
+            <!-- Dynamic Categorized Store Menu Sections -->
+            <div id="rstFormMenuSectionsContainer" style="display: flex; flex-direction: column; gap: 0.9rem; margin-top: 0.85rem;">
+              <!-- Populated by JS -->
+            </div>
+          </div>
           <div class="form-group">
-            <label class="form-label required" for="rstDesc">รายละเอียดร้าน / ความพิเศษ</label>
-            <textarea id="rstDesc" class="form-control" required placeholder="อธิบายจุดเด่นของร้าน รสชาติ ความคุ้มค่า..."></textarea>
+            <label class="form-label" for="rstDesc">รายละเอียดร้าน / ความพิเศษ</label>
+            <textarea id="rstDesc" class="form-control" placeholder="อธิบายจุดเด่นของร้าน รสชาติ ความคุ้มค่า..."></textarea>
           </div>
           <div class="form-group">
             <label class="form-label" for="rstTags">แท็กแนะนำ (คั่นด้วยจุลภาค ,)</label>
             <input type="text" id="rstTags" class="form-control" placeholder="เช่น ให้เยอะ, รสจัด, แถมน้ำซุป, มี Wi-Fi">
           </div>
           <button type="submit" class="btn btn-primary" style="width: 100%;">
-            💾 บันทึกข้อมูลร้านอาหาร
+            บันทึกข้อมูลร้านอาหาร
           </button>
         </form>
       </div>
@@ -912,29 +1244,50 @@
   <div class="modal-backdrop" id="newsFormModal" onclick="closeModalOnBackdrop(event, this)">
     <div class="modal-window">
       <div class="modal-header">
-        <div class="modal-title">📢 เพิ่มข่าวสาร / โปรโมชั่นใหม่</div>
+        <div class="modal-title">เพิ่มข่าวสาร / โปรโมชั่นใหม่</div>
         <button type="button" class="modal-close-btn" onclick="closeModal('newsFormModal')">✕</button>
       </div>
       <div class="modal-body">
-        <form onsubmit="handleNewsSubmit(event)">
+        <form onsubmit="handleNewsSubmit(event)" novalidate>
           <div class="form-group">
-            <label class="form-label required" for="newsTitle">หัวข้อข่าว / ชื่อโปรโมชั่น</label>
-            <input type="text" id="newsTitle" class="form-control" required placeholder="เช่น ลด 10% ทุกเมนูตลอดเดือน">
+            <label class="form-label" for="newsTitle">หัวข้อข่าว / ชื่อโปรโมชั่น</label>
+            <input type="text" id="newsTitle" class="form-control" placeholder="เช่น ลด 10% ทุกเมนูตลอดเดือน">
           </div>
           <div class="form-group">
-            <label class="form-label required" for="newsTag">หมวดหมู่ข่าว</label>
-            <input type="text" id="newsTag" class="form-control" required placeholder="เช่น โปรโมชั่นเด็ด, ข่าวสารมหาลัย">
+            <label class="form-label" for="newsTag">หมวดหมู่ข่าว</label>
+            <input type="text" id="newsTag" class="form-control" placeholder="เช่น โปรโมชั่นเด็ด, ข่าวสารมหาลัย">
           </div>
           <div class="form-group">
-            <label class="form-label required" for="newsContent">เนื้อหาข่าว / รายละเอียด</label>
-            <textarea id="newsContent" class="form-control" required placeholder="รายละเอียดโปรโมชั่น เงื่อนไข..."></textarea>
+            <label class="form-label" for="newsContent">เนื้อหาข่าว / รายละเอียด</label>
+            <textarea id="newsContent" class="form-control" placeholder="รายละเอียดโปรโมชั่น เงื่อนไข..."></textarea>
           </div>
           <div class="form-group">
-            <label class="form-label required" for="newsImage">ลิงก์รูปภาพประกอบ (URL)</label>
-            <input type="url" id="newsImage" class="form-control" required placeholder="https://images.unsplash.com/...">
+            <label class="form-label" for="newsImage">รูปภาพประกอบข่าว / โปรโมชั่น (อัปโหลดจากเครื่อง หรือใส่ URL)</label>
+            
+            <!-- Preview Box -->
+            <div id="newsImagePreviewContainer" style="display: none; position: relative; margin-bottom: 0.75rem; border-radius: var(--radius-md); overflow: hidden; border: 2px solid var(--card-border); background: var(--bg-surface-alt);">
+              <img id="newsImagePreviewImg" src="" alt="ตัวอย่างรูปข่าวสาร" style="width: 100%; max-height: 200px; object-fit: cover; display: block;">
+              <button type="button" class="btn btn-danger btn-sm" onclick="clearNewsFormImage()" style="position: absolute; top: 8px; right: 8px; padding: 0.25rem 0.65rem; font-size: 0.78rem;">
+                🗑️ ลบรูปภาพ
+              </button>
+            </div>
+
+            <!-- Upload from Device Box -->
+            <div style="background: var(--bg-surface-alt); border: 2px dashed var(--border-color); border-radius: var(--radius-md); padding: 0.9rem; text-align: center; margin-bottom: 0.65rem;">
+              <input type="file" id="newsImageFileInput" accept="image/*" style="display: none;" onchange="handleNewsImageFileUpload(event)">
+              <div style="font-size: 1.4rem; margin-bottom: 0.2rem;">📷</div>
+              <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.2rem;">เลือกรูปภาพจากเครื่องคอมพิวเตอร์ของคุณ</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.6rem;">รองรับไฟล์ PNG, JPG, JPEG, WebP, GIF (ย่อขนาดอัตโนมัติ)</div>
+              <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('newsImageFileInput').click()">
+                📁 เลือกรูปภาพจากเครื่อง
+              </button>
+            </div>
+
+            <!-- Or Image URL Input -->
+            <input type="text" id="newsImage" class="form-control" placeholder="หรือวางลิงก์รูปภาพ (https://...) ที่นี่..." oninput="handleNewsImageUrlInput(this.value)">
           </div>
           <button type="submit" class="btn btn-primary" style="width: 100%;">
-            🚀 เผยแพร่ข่าวสาร
+            เผยแพร่ข่าวสาร
           </button>
         </form>
       </div>
@@ -946,13 +1299,12 @@
        ========================================== -->
   <div class="modal-backdrop" id="adminAccessModal" onclick="closeModalOnBackdrop(event, this)">
     <div class="modal-window" style="max-width: 450px;">
-      <div class="modal-header" style="background: linear-gradient(135deg, #1e1b4b, #312e81);">
-        <div class="modal-title" style="color: #fff;">🔐 เข้าสู่ระบบผู้ดูแล</div>
+      <div class="modal-header" style="background: var(--secondary);">
+        <div class="modal-title" style="color: #fff;">เข้าสู่ระบบผู้ดูแลระบบ (Admin Access)</div>
         <button type="button" class="modal-close-btn" style="color: #94a3b8;" onclick="closeModal('adminAccessModal')">✕</button>
       </div>
       <div class="modal-body">
         <div style="text-align: center; padding: 1rem 0;">
-          <div style="font-size: 3rem; margin-bottom: 0.5rem;">🛡️</div>
           <h3 style="margin-bottom: 0.25rem;">Admin Control Panel</h3>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">ส่วนนี้สงวนเฉพาะผู้ดูแลระบบเท่านั้น<br>กรุณากรอกอีเมลและรหัสผ่านของแอดมิน</p>
         </div>
@@ -960,17 +1312,22 @@
         <form onsubmit="handleAdminLoginSubmit(event)">
           <div class="form-group">
             <label class="form-label required" for="adminLoginEmail">อีเมลผู้ดูแลระบบ</label>
-            <input type="email" id="adminLoginEmail" class="form-control" required placeholder="admin@spu.ac.th" autocomplete="off">
+            <input type="email" id="adminLoginEmail" class="form-control" required placeholder="กรอกอีเมลแอดมินของคุณ" autocomplete="off">
           </div>
           <div class="form-group">
             <label class="form-label required" for="adminLoginPassword">รหัสผ่านผู้ดูแลระบบ</label>
-            <input type="password" id="adminLoginPassword" class="form-control" required placeholder="กรอกรหัสผ่าน" autocomplete="off">
+            <div class="password-input-wrapper">
+              <input type="password" id="adminLoginPassword" class="form-control" required placeholder="กรอกรหัสผ่าน" autocomplete="off">
+              <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('adminLoginPassword', this)" aria-label="แสดงหรือซ่อนรหัสผ่าน">
+                👁️ ดูรหัส
+              </button>
+            </div>
           </div>
           <div id="adminLoginError" style="display: none; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 0.6rem 0.85rem; border-radius: var(--radius-sm); font-size: 0.85rem; margin-bottom: 1rem;">
-            ❌ อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือบัญชีนี้ไม่มีสิทธิ์แอดมิน
+            อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือบัญชีนี้ไม่มีสิทธิ์แอดมิน
           </div>
-          <button type="submit" class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, #7c3aed, #4f46e5);">
-            🔓 เข้าสู่ระบบแอดมิน
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            เข้าสู่ระบบแอดมิน
           </button>
         </form>
 
@@ -984,48 +1341,12 @@
   </div>
 
   <!-- ==========================================
-       MODAL 8: Google Cloud Console Setup Helper
-       ========================================== -->
-  <div class="modal-backdrop" id="googleConfigModal" onclick="closeModalOnBackdrop(event, this)">
-    <div class="modal-window" style="max-width: 520px;">
-      <div class="modal-header">
-        <div class="modal-title" style="display: flex; align-items: center; gap: 0.5rem; font-size: 1.15rem;">
-          <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.79l7.97-6.2z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-          Google Cloud Console OAuth 2.0
-        </div>
-        <button type="button" class="modal-close-btn" onclick="closeModal('googleConfigModal')">✕</button>
-      </div>
-      <div class="modal-body">
-        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
-          กำหนดค่า <strong>Google OAuth 2.0 Web Client ID</strong> จาก Google Cloud เพื่อให้ผู้ใช้งานสามารถกดล็อกอินด้วยบัญชี Google จริงได้ทันที:
-        </p>
-        <div class="form-group">
-          <label class="form-label required" for="googleConfigClientIdInput">OAuth 2.0 Client ID:</label>
-          <input type="text" id="googleConfigClientIdInput" class="form-control" placeholder="เช่น 123456789-abcdef.apps.googleusercontent.com">
-        </div>
-        <div style="background: var(--bg-surface-alt); padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.6;">
-          <strong>📌 ขั้นตอนจาก Google Cloud Console:</strong><br>
-          1. เข้าสู่ระบบ <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color: var(--primary); text-decoration: underline;">console.cloud.google.com</a><br>
-          2. ไปที่ <strong>APIs & Services</strong> > <strong>Credentials</strong><br>
-          3. กด <strong>+ Create Credentials</strong> > เลือก <strong>OAuth client ID</strong><br>
-          4. Application type: เลือก <strong>Web application</strong><br>
-          5. คัดลอก Client ID มาวางในช่องด้านบน แล้วกดบันทึก
-        </div>
-        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-          <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('googleConfigModal')">ยกเลิก</button>
-          <button type="button" class="btn btn-primary btn-sm" onclick="saveGoogleConfigClientId()">💾 บันทึก Client ID</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==========================================
        MODAL 9: Applicant Dossier & Member Details
        ========================================== -->
   <div class="modal-backdrop" id="applicantDetailModal" onclick="closeModalOnBackdrop(event, this)">
     <div class="modal-window modal-lg" style="max-width: 680px;">
       <div class="modal-header">
-        <div class="modal-title">📄 รายละเอียดข้อมูลผู้สมัครสมาชิก SPU</div>
+        <div class="modal-title">รายละเอียดข้อมูลผู้สมัครสมาชิกจานเด็ด SPU</div>
         <button type="button" class="modal-close-btn" onclick="closeModal('applicantDetailModal')">✕</button>
       </div>
       <div class="modal-body" id="applicantDetailBody">
@@ -1040,7 +1361,7 @@
   <div class="modal-backdrop" id="imageLightboxModal" onclick="closeModalOnBackdrop(event, this)">
     <div class="modal-window" style="max-width: 820px; background: rgba(15, 23, 42, 0.96); border: 2.5px solid var(--primary); padding: 1.25rem; color: #fff;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-        <span id="lightboxCaption" style="color: #fff; font-weight: 700; font-size: 1rem;">📷 ภาพร้านอาหาร SPU</span>
+        <span id="lightboxCaption" style="color: #fff; font-weight: 700; font-size: 1rem;">ภาพร้านอาหาร SPU</span>
         <button type="button" class="modal-close-btn" style="color: #fff;" onclick="closeModal('imageLightboxModal')">✕</button>
       </div>
       <div style="position: relative; text-align: center; display: flex; align-items: center; justify-content: center; min-height: 280px;">
@@ -1053,14 +1374,21 @@
   </div>
 
   <!-- ==========================================
+       Bottom Festival Floating Emojis Lane
+       ========================================== -->
+  <div class="bottom-festival-float-lane" id="bottomFestivalFloatLane" aria-hidden="true"></div>
+
+  <!-- ==========================================
        Toast Notifications Container
        ========================================== -->
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- ==========================================
-       JavaScript Scripts
+       JavaScript Scripts & Firebase SDK
        ========================================== -->
-  <script src="js/data.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script type="module" src="js/firebase-service.js"></script>
+  <script src="js/data.js?v=20261121_1"></script>
+  <script src="js/app.js?v=20261121_1"></script>
 </body>
 </html>

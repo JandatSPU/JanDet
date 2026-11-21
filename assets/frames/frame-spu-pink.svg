@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shSpuPink" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#881337" flood-opacity="0.3"/>
+    </filter>
+    <linearGradient id="spuRose" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fecdd3"/>
+      <stop offset="50%" stop-color="#f43f5e"/>
+      <stop offset="100%" stop-color="#be123c"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shSpuPink)">
+    <circle cx="100" cy="100" r="70" stroke="url(#spuRose)" stroke-width="8.5" fill="none"/>
+    <circle cx="100" cy="100" r="74.2" stroke="#881337" stroke-width="1.6" fill="none"/>
+    <circle cx="100" cy="100" r="65.8" stroke="#fff1f2" stroke-width="1.6" fill="none"/>
+    <circle cx="30" cy="100" r="4.5" fill="#fff1f2" stroke="#be123c" stroke-width="1.5"/>
+    <circle cx="170" cy="100" r="4.5" fill="#fff1f2" stroke="#be123c" stroke-width="1.5"/>
+    <g transform="translate(100, 25)">
+      <path d="M-4 3 L-22 19 L-13 17 L-10 23 L-1 5 Z" fill="#e11d48" stroke="#881337" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M4 3 L22 19 L13 17 L10 23 L1 5 Z" fill="#e11d48" stroke="#881337" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M-2 0 C-16 -14, -30 -4, -22 6 C-16 12, -5 6, -2 2 Z" fill="#fb7185" stroke="#881337" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M2 0 C16 -14, 30 -4, 22 6 C16 12, 5 6, 2 2 Z" fill="#fb7185" stroke="#881337" stroke-width="1.8" stroke-linejoin="round"/>
+      <rect x="-5" y="-5" width="10" height="9" rx="3.5" fill="#fecdd3" stroke="#881337" stroke-width="1.6"/>
+    </g>
+    <g transform="translate(100, 171)">
+      <path d="M0 11 C-15 1, -17 -11, -7 -11 C-2 -11, 0 -6, 0 -6 C0 -6, 2 -11, 7 -11 C17 -11, 15 1, 0 11 Z" fill="#e11d48" stroke="#881337" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="-5" cy="-5" r="2" fill="#ffffff" opacity="0.7"/>
+    </g>
+  </g>
+</svg>

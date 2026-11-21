@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shKnight" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#0f172a" flood-opacity="0.35"/>
+    </filter>
+    <linearGradient id="platSteel" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="50%" stop-color="#94a3b8"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shKnight)">
+    <g fill="#f1f5f9" stroke="#334155" stroke-width="1.6" stroke-linejoin="round">
+      <path d="M32 98 C10 86, 6 62, 26 68 C12 52, 16 34, 36 48 C26 32, 34 20, 48 38 L44 82 Z"/>
+      <path d="M168 98 C190 86, 194 62, 174 68 C188 52, 184 34, 164 48 C174 32, 166 20, 152 38 L156 82 Z"/>
+    </g>
+    <circle cx="100" cy="100" r="70" stroke="url(#platSteel)" stroke-width="9" fill="none"/>
+    <circle cx="100" cy="100" r="74.5" stroke="#1e293b" stroke-width="1.8" fill="none"/>
+    <circle cx="100" cy="100" r="65.5" stroke="#e2e8f0" stroke-width="1.6" fill="none"/>
+    <g transform="translate(100, 24)">
+      <polygon points="0,-13 10,0 0,13 -10,0" fill="#38bdf8" stroke="#1e293b" stroke-width="1.8"/>
+      <polygon points="0,-7 5,0 0,7 -5,0" fill="#e0f2fe"/>
+    </g>
+    <g transform="translate(100, 171)">
+      <path d="M-13 -11 L13 -11 L13 0 C13 9, 0 15, 0 15 C0 15, -13 9, -13 0 Z" fill="#e2e8f0" stroke="#1e293b" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M0 -8 L7 0 L0 10 L-7 0 Z" fill="#0284c7"/>
+    </g>
+  </g>
+</svg>

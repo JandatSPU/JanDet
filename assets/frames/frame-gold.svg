@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shGold" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#713f12" flood-opacity="0.35"/>
+    </filter>
+    <linearGradient id="medalGold" x1="20" y1="20" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fef9c3"/>
+      <stop offset="45%" stop-color="#facc15"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shGold)">
+    <circle cx="100" cy="100" r="73.5" stroke="#ca8a04" stroke-width="5" stroke-dasharray="3 5" fill="none"/>
+    <circle cx="100" cy="100" r="70" stroke="url(#medalGold)" stroke-width="8.5" fill="none"/>
+    <circle cx="100" cy="100" r="65.8" stroke="#854d0e" stroke-width="1.6" fill="none"/>
+    <g transform="translate(100, 23)">
+      <polygon points="0,-13 3.8,-4 13,-3 6,3.5 8,12.5 0,7.8 -8,12.5 -6,3.5 -13,-3 -3.8,-4" fill="url(#medalGold)" stroke="#854d0e" stroke-width="1.7" stroke-linejoin="round"/>
+      <circle cx="0" cy="1" r="2.5" fill="#ffffff" opacity="0.8"/>
+    </g>
+    <path d="M26 92 L28.5 98 L35 100.5 L28.5 103 L26 109 L23.5 103 L17 100.5 L23.5 98 Z" fill="#facc15" stroke="#854d0e" stroke-width="1.2"/>
+    <path d="M174 92 L176.5 98 L183 100.5 L176.5 103 L174 109 L171.5 103 L165 100.5 L171.5 98 Z" fill="#facc15" stroke="#854d0e" stroke-width="1.2"/>
+    <g transform="translate(100, 171)">
+      <path d="M-8 2 L-16 17 L-9 15 L-5 19 L-1 4 Z" fill="#e11d48" stroke="#881337" stroke-width="1.4"/>
+      <path d="M8 2 L16 17 L9 15 L5 19 L1 4 Z" fill="#e11d48" stroke="#881337" stroke-width="1.4"/>
+      <circle cx="0" cy="0" r="10.5" fill="url(#medalGold)" stroke="#854d0e" stroke-width="1.8"/>
+      <circle cx="0" cy="0" r="7" fill="#eab308" stroke="#fef08a" stroke-width="1.2"/>
+    </g>
+  </g>
+</svg>

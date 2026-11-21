@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260" fill="none">
+  <defs>
+    <linearGradient id="bgHall" x1="0" y1="0" x2="800" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e0b36"/>
+      <stop offset="52%" stop-color="#4c1d95"/>
+      <stop offset="100%" stop-color="#9a3412"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="260" rx="22" fill="url(#bgHall)"/>
+
+  <!-- Harvest Orange Moon -->
+  <circle cx="675" cy="72" r="56" fill="#fb923c" opacity="0.25"/>
+  <circle cx="675" cy="72" r="38" fill="#fdba74"/>
+
+  <!-- Spooky Bats -->
+  <path d="M120 45 Q 130 35 140 45 Q 148 38 156 46 Q 146 52 140 50 Q 134 52 120 45 Z" fill="#0f172a"/>
+  <path d="M620 42 Q 630 32 640 42 Q 648 35 656 43 Q 646 49 640 47 Q 634 49 620 42 Z" fill="#0f172a"/>
+  <path d="M210 68 Q 217 60 224 68 Q 231 60 238 68 Q 230 73 224 71 Q 218 73 210 68 Z" fill="#0f172a"/>
+
+  <!-- Bottom Ground Silhouette -->
+  <path d="M0 218 Q 220 202 420 218 T 800 210 V 260 H 0 Z" fill="#140726"/>
+
+  <!-- Left Glowing Jack-o'-Lantern Pumpkin & Candy -->
+  <g transform="translate(65, 102)">
+    <path d="M62 12 Q 68 0 76 6" stroke="#15803d" stroke-width="6" stroke-linecap="round"/>
+    <ellipse cx="65" cy="68" rx="54" ry="44" fill="#ea580c" stroke="#fdba74" stroke-width="3"/>
+    <ellipse cx="65" cy="68" rx="34" ry="44" fill="#f97316"/>
+    <!-- Glowing Eyes & Grin -->
+    <polygon points="42,56 54,44 58,60" fill="#fef08a"/>
+    <polygon points="88,56 76,44 72,60" fill="#fef08a"/>
+    <polygon points="65,62 60,70 70,70" fill="#fef08a"/>
+    <path d="M40 78 Q 65 98 90 78 L 82 88 L 72 82 L 65 90 L 58 82 L 48 88 Z" fill="#fef08a"/>
+  </g>
+
+  <!-- Right Spooky Cauldron Soup & Halloween Cupcake -->
+  <g transform="translate(590, 96)">
+    <!-- Bubbling Green Soup in Black Cauldron -->
+    <ellipse cx="70" cy="54" rx="44" ry="14" fill="#84cc16"/>
+    <circle cx="55" cy="48" r="6" fill="#bef264"/>
+    <circle cx="78" cy="44" r="8" fill="#bef264"/>
+    <circle cx="90" cy="52" r="5" fill="#a3e635"/>
+    <path d="M22 54 H118 C124 98 100 120 70 120 C40 120 16 98 22 54 Z" fill="#1e293b" stroke="#475569" stroke-width="3"/>
+    <!-- Ladle -->
+    <line x1="88" y1="48" x2="115" y2="14" stroke="#f59e0b" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Center Festival Title -->
+  <g transform="translate(400, 132)" text-anchor="middle">
+    <rect x="-165" y="-54" width="330" height="32" rx="16" fill="#ea580c" fill-opacity="0.28" stroke="#fdba74" stroke-width="1.5"/>
+    <text x="0" y="-33" fill="#fed7aa" font-family="Mitr, Prompt, sans-serif" font-size="14" font-weight="600" letter-spacing="1">🎃 HALLOWEEN SPOOKY FEAST</text>
+    <text x="0" y="8" fill="#ffffff" font-family="Mitr, Prompt, sans-serif" font-size="33" font-weight="700">เทศกาลฮาโลวีน SPU</text>
+    <text x="0" y="38" fill="#fde68a" font-family="Prompt, sans-serif" font-size="15" font-weight="500">ปาร์ตี้กุ๊กกู๋รวมเมนูเด็ดสุดจี๊ด หลอกหรือเลี้ยงก็อิ่มฟินทั้งโรงอาหาร</text>
+  </g>
+</svg>

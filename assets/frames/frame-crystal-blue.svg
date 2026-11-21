@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shCrystal" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0284c7" flood-opacity="0.4"/>
+    </filter>
+    <linearGradient id="iceGrad" x1="20" y1="10" x2="180" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e0f2fe"/>
+      <stop offset="50%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shCrystal)">
+    <circle cx="100" cy="100" r="70" stroke="url(#iceGrad)" stroke-width="8.5" fill="none"/>
+    <circle cx="100" cy="100" r="74.2" stroke="#0369a1" stroke-width="1.6" fill="none"/>
+    <circle cx="100" cy="100" r="65.8" stroke="#bae6fd" stroke-width="1.8" fill="none"/>
+    <g transform="translate(100, 23)">
+      <polygon points="-24,10 -18,-6 -10,6" fill="#7dd3fc" stroke="#0369a1" stroke-width="1.5"/>
+      <polygon points="24,10 18,-6 10,6" fill="#7dd3fc" stroke="#0369a1" stroke-width="1.5"/>
+      <polygon points="-14,8 -8,-12 0,4" fill="#bae6fd" stroke="#0369a1" stroke-width="1.6"/>
+      <polygon points="14,8 8,-12 0,4" fill="#bae6fd" stroke="#0369a1" stroke-width="1.6"/>
+      <polygon points="-8,8 0,-19 8,8" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.8"/>
+      <polygon points="0,-14 4,-2 0,6 -4,-2" fill="#38bdf8"/>
+    </g>
+    <g transform="translate(26, 98)" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="0" cy="0" r="8" fill="#0284c7" stroke="#bae6fd" stroke-width="1.5"/>
+      <path d="M0 -5 L0 5 M-4.3 -2.5 L4.3 2.5 M-4.3 2.5 L4.3 -2.5"/>
+    </g>
+    <g transform="translate(174, 98)" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="0" cy="0" r="8" fill="#0284c7" stroke="#bae6fd" stroke-width="1.5"/>
+      <path d="M0 -5 L0 5 M-4.3 -2.5 L4.3 2.5 M-4.3 2.5 L4.3 -2.5"/>
+    </g>
+    <g transform="translate(100, 172)">
+      <polygon points="0,-14 11,0 0,14 -11,0" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.8"/>
+      <polygon points="0,-9 6,0 0,9 -6,0" fill="#38bdf8"/>
+    </g>
+  </g>
+</svg>

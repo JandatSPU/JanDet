@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shChef" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#7c2d12" flood-opacity="0.32"/>
+    </filter>
+    <linearGradient id="copperPan" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fed7aa"/>
+      <stop offset="50%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#c2410c"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shChef)">
+    <circle cx="100" cy="100" r="70" stroke="url(#copperPan)" stroke-width="8.5" fill="none"/>
+    <circle cx="100" cy="100" r="74.2" stroke="#7c2d12" stroke-width="1.8" fill="none"/>
+    <circle cx="100" cy="100" r="65.8" stroke="#ffedd5" stroke-width="1.6" fill="none"/>
+    <g transform="translate(100, 23)">
+      <path d="M-18 7 C-26 2, -24 -11, -13 -11 C-9 -19, 9 -19, 13 -11 C24 -11, 26 2, 18 7 Z" fill="#ffffff" stroke="#475569" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M-7 -6 L-5 4 M0 -8 L0 4 M7 -6 L5 4" stroke="#cbd5e1" stroke-width="1.4" stroke-linecap="round"/>
+      <rect x="-16" y="5" width="32" height="6.5" rx="2" fill="#e11d48" stroke="#881337" stroke-width="1.5"/>
+    </g>
+    <g transform="translate(100, 171)">
+      <rect x="-24" y="-7" width="48" height="14" rx="7" fill="#7c2d12" stroke="#fed7aa" stroke-width="1.6"/>
+      <circle cx="-12" cy="0" r="3.2" fill="#fde047"/>
+      <circle cx="0" cy="0" r="4.2" fill="#fde047"/>
+      <circle cx="12" cy="0" r="3.2" fill="#fde047"/>
+    </g>
+  </g>
+</svg>

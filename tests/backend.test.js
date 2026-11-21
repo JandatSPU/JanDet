@@ -16,6 +16,10 @@ console.log('  Testing StorageModel...');
 StorageModel.write('test_file', { hello: 'world' });
 const readBack = StorageModel.read('test_file');
 assert.strictEqual(readBack.hello, 'world', 'StorageModel read/write failed');
+const fs = require('fs');
+const path = require('path');
+const testFilePath = path.join(__dirname, '..', 'server', 'data', 'test_file.json');
+if (fs.existsSync(testFilePath)) fs.unlinkSync(testFilePath);
 console.log('  ✅ StorageModel passed!');
 
 // 2. AnalyticsController Test

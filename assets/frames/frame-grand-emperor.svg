@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <filter id="shEmp" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#451a03" flood-opacity="0.4"/>
+    </filter>
+    <linearGradient id="impGold" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shEmp)">
+    <g fill="url(#impGold)" stroke="#78350f" stroke-width="1.7" stroke-linejoin="round">
+      <path d="M32 104 C6 90, 4 64, 24 70 C8 52, 14 32, 36 46 C24 28, 34 14, 50 34 L44 88 Z"/>
+      <path d="M168 104 C194 90, 196 64, 176 70 C192 52, 186 32, 164 46 C176 28, 166 14, 150 34 L156 88 Z"/>
+    </g>
+    <circle cx="100" cy="100" r="70" stroke="url(#impGold)" stroke-width="9.5" fill="none"/>
+    <circle cx="100" cy="100" r="74.8" stroke="#78350f" stroke-width="1.8" fill="none"/>
+    <circle cx="100" cy="100" r="65.2" stroke="#fef08a" stroke-width="1.6" fill="none"/>
+    <g transform="translate(100, 22)">
+      <path d="M-26 11 L-22 -7 L-9 4 L0 -14 L9 4 L22 -7 L26 11 Z" fill="url(#impGold)" stroke="#78350f" stroke-width="1.8" stroke-linejoin="round"/>
+      <rect x="-24" y="9" width="48" height="4.5" rx="2" fill="#e11d48" stroke="#78350f" stroke-width="1.4"/>
+      <circle cx="0" cy="-14" r="3.2" fill="#e11d48" stroke="#78350f" stroke-width="1.2"/>
+      <circle cx="-22" cy="-7" r="2.8" fill="#38bdf8" stroke="#78350f" stroke-width="1.2"/>
+      <circle cx="22" cy="-7" r="2.8" fill="#38bdf8" stroke="#78350f" stroke-width="1.2"/>
+      <circle cx="0" cy="3" r="3.2" fill="#e11d48" stroke="#ffffff" stroke-width="1"/>
+    </g>
+    <g transform="translate(100, 172)">
+      <path d="M-30 -2 C-14 -7, 14 -7, 30 -2 L24 9 C10 5, -10 5, -24 9 Z" fill="#e11d48" stroke="#78350f" stroke-width="1.8" stroke-linejoin="round"/>
+      <polygon points="0,-11 10,0 0,11 -10,0" fill="url(#impGold)" stroke="#78350f" stroke-width="1.8"/>
+      <circle cx="0" cy="0" r="4" fill="#e11d48"/>
+    </g>
+  </g>
+</svg>
