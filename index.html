@@ -605,7 +605,13 @@
               <li><a href="#" onclick="openAuthModal(); return false;" style="transition: color var(--transition-fast);">เข้าสู่ระบบ / สมัครสมาชิก</a></li>
               <li><a href="#leaderboardSection" onclick="switchAppView('leaderboard'); return false;" style="transition: color var(--transition-fast);">ตารางอันดับ & เหรียญเกียรติยศ</a></li>
             </ul>
-            <div style="margin-top: 0.85rem; font-size: 0.775rem; color: var(--text-muted); background: var(--bg-surface-alt); padding: 0.35rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: inline-flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+            <div id="footerContactBox" style="margin-top: 0.85rem; padding: 0.75rem 0.9rem; background: var(--bg-surface-alt); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.8rem; color: var(--text-muted); line-height: 1.75;">
+              <div style="font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem;">📞 ช่องทางติดต่อผู้ดูแล</div>
+              <div>📧 อีเมล: <a href="mailto:maoth66y6@gmail.com" style="color: var(--primary); font-weight: 600;">maoth66y6@gmail.com</a></div>
+              <div>📱 โทร: <a href="tel:0632406675" style="color: var(--primary); font-weight: 600;">063-240-6675</a></div>
+              <div>💬 LINE ID: <strong style="color: var(--text-main);">739733890</strong></div>
+            </div>
+            <div style="margin-top: 0.75rem; font-size: 0.775rem; color: var(--text-muted); background: var(--bg-surface-alt); padding: 0.35rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: inline-flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
               <span>สถิติการเข้าชม:</span> <strong id="publicVisitorCount" style="color: var(--primary);">1</strong> <span>ครั้ง</span>
               <span style="opacity: 0.35;">|</span>
               <span>ผู้เข้าชมจริง:</span> <strong id="publicUniqueVisitorCount" style="color: var(--primary);">1</strong> <span>คน</span>
@@ -705,13 +711,13 @@
                 <input type="text" id="regStudentId" class="form-control" placeholder="เว้นว่างไว้เพื่อสุ่มไอดีอัตโนมัติ">
               </div>
               <div class="form-group">
-                <label class="form-label" for="regPhone">เบอร์โทรศัพท์ติดต่อ</label>
-                <input type="tel" id="regPhone" class="form-control" placeholder="08x-xxx-xxxx">
+                <label class="form-label" for="regPhone">เบอร์โทรศัพท์ติดต่อ (ตัวเลข 10 หลัก)</label>
+                <input type="tel" id="regPhone" class="form-control" maxlength="10" inputmode="numeric" placeholder="08xxxxxxxx (10 หลัก)" oninput="sanitizeThaiPhoneInput(this)">
               </div>
             </div>
             <div class="form-group">
-              <label class="form-label required" for="regEmail">อีเมล</label>
-              <input type="email" id="regEmail" class="form-control" required placeholder="name@spu.ac.th หรือ gmail.com">
+              <label class="form-label required" for="regEmail">อีเมล (เฉพาะ @gmail.com เท่านั้น)</label>
+              <input type="email" id="regEmail" class="form-control" required placeholder="example@gmail.com (รองรับเฉพาะ @gmail.com)">
             </div>
             <div class="mobile-stack-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
               <div class="form-group">
@@ -1389,6 +1395,6 @@
   <script src="js/firebase-config.js"></script>
   <script type="module" src="js/firebase-service.js"></script>
   <script src="js/data.js?v=20261121_1"></script>
-  <script src="js/app.js?v=20261121_1"></script>
+  <script src="js/app.js?v=20261123_1"></script>
 </body>
 </html>

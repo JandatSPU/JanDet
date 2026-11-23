@@ -1,6 +1,6 @@
 {
-  "pageViews": 222,
-  "uniqueVisitors": 113,
+  "pageViews": 223,
+  "uniqueVisitors": 114,
   "dailyVisits": {
     "2026-11-10": 142,
     "2026-11-11": 45,
@@ -9,10 +9,17 @@
     "2026-11-17": 3,
     "2026-11-18": 10,
     "2026-11-20": 7,
-    "2026-11-21": 1
+    "2026-11-21": 1,
+    "2026-11-23": 1
   },
-  "lastHit": "2026-11-21T14:30:49.824Z",
+  "lastHit": "2026-11-23T07:19:25.644Z",
   "recentHits": [
+    {
+      "visitorUuid": "anonymous",
+      "timestamp": "2026-11-23T07:19:25.644Z",
+      "page": "/test",
+      "referrer": "direct"
+    },
     {
       "visitorUuid": "anonymous",
       "timestamp": "2026-11-21T14:30:49.824Z",

@@ -806,6 +806,18 @@ function getEffectiveMemberId(user) {
   return `SPU-${num}`;
 }
 
+function sanitizeThaiPhoneInput(inputEl) {
+  if (!inputEl) return;
+  const digitsOnly = String(inputEl.value || '').replace(/\D/g, '').slice(0, 10);
+  if (inputEl.value !== digitsOnly) {
+    inputEl.value = digitsOnly;
+  }
+}
+
+function isValidGmailAddress(email) {
+  return /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(String(email || '').trim());
+}
+
 async function handleRegisterSubmit(event) {
   event.preventDefault();
   if (!ensureFirebaseAuthReady()) return;
@@ -818,8 +830,21 @@ async function handleRegisterSubmit(event) {
     ? rawStudentId
     : getEffectiveMemberId({ email, name });
   const faculty = (document.getElementById('regFaculty')?.value || '').trim() || 'ม.ศรีปทุม';
-  const phone = (document.getElementById('regPhone')?.value || '').trim() || '-';
+  const rawPhone = (document.getElementById('regPhone')?.value || '').replace(/\D/g, '').slice(0, 10);
+  const phone = rawPhone || '-';
   const password = document.getElementById('regPassword')?.value || '';
+
+  if (!isValidGmailAddress(email)) {
+    showToast('⚠️ การสมัครสมาชิกรองรับเฉพาะอีเมลที่ลงท้ายด้วย @gmail.com เท่านั้น', 'error');
+    document.getElementById('regEmail')?.focus();
+    return;
+  }
+
+  if (rawPhone.length > 0 && rawPhone.length !== 10) {
+    showToast('⚠️ กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลขให้ครบ 10 หลัก (เช่น 0812345678)', 'error');
+    document.getElementById('regPhone')?.focus();
+    return;
+  }
 
   if (password.length < 8) {
     showToast('รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร', 'error');
